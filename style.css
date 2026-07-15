@@ -439,6 +439,8 @@ body.login-mode {
 body.app-mode {
   display: block;
   min-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .login-screen { display: none; }
