@@ -3,35 +3,136 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CS Personal Dashboard</title>
+<title>CS Personal Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-<div class="topbar">
-  <h1>CS Personal Dashboard</h1>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <h1>CS Personal Tool</h1>
+  </div>
+
+  <nav class="tabs" id="tabNav" style="display:none;">
+    <button class="tab active" data-tab="overview">Tổng quan</button>
+    <button class="tab" data-tab="forecast">Forecast</button>
+    <button class="tab" data-tab="dashboard">Dashboard</button>
+  </nav>
+
   <div class="user-box" id="userBox" style="display:none;">
     <span id="userEmail"></span>
     <button class="btn" id="logoutBtn">Đăng xuất</button>
   </div>
-</div>
+</header>
 
-<div class="wrap">
+<main class="wrap">
 
-  <div class="login-screen" id="loginScreen">
+  <!-- LOGIN -->
+  <section class="login-screen" id="loginScreen">
     <h2>Đăng nhập bằng email @base.vn</h2>
-    <p>Tool tự nhận diện đúng danh sách deal của m dựa theo email đăng nhập. Lần sau mở lại trên cùng thiết bị này sẽ không cần đăng nhập lại.</p>
+    <p>Tool tự nhận diện đúng danh sách deal của bạn theo email đăng nhập. Lần sau mở trên cùng thiết bị sẽ không cần đăng nhập lại.</p>
     <div id="gsiButton"></div>
     <p id="loginError" class="error-box" style="display:none;"></p>
-  </div>
+  </section>
 
-  <div id="dashboard" style="display:none;">
-    <div class="summary-bar" id="summaryBar"></div>
-    <div class="deal-grid" id="dealGrid"></div>
-  </div>
+  <!-- TAB: TỔNG QUAN -->
+  <section class="tab-panel" id="panel-overview" style="display:none;">
 
-</div>
+    <div class="filter-bar">
+      <div class="filter-field">
+        <label for="dateFrom">Nhận deal từ</label>
+        <input type="date" id="dateFrom">
+      </div>
+      <div class="filter-field">
+        <label for="dateTo">Đến</label>
+        <input type="date" id="dateTo">
+      </div>
+      <div class="filter-presets">
+        <button class="chip" data-preset="month">Tháng này</button>
+        <button class="chip" data-preset="quarter">Quý này</button>
+        <button class="chip" data-preset="year">Năm nay</button>
+        <button class="chip" data-preset="all">Tất cả</button>
+      </div>
+      <div class="filter-count" id="filterCount"></div>
+    </div>
+
+    <div class="health-strip" id="healthStrip"></div>
+
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Tổng revenue đang thực hiện</div>
+        <div class="kpi-value" id="kpiRevenue">—</div>
+        <div class="kpi-sub" id="kpiRevenueSub"></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">CHS_CS trung bình</div>
+        <div class="kpi-value" id="kpiChs">—</div>
+        <div class="kpi-sub" id="kpiChsSub"></div>
+      </div>
+      <div class="kpi-card kpi-health">
+        <div class="kpi-label">Sức khỏe deal</div>
+        <div class="health-counts" id="healthCounts"></div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-title">Theo bộ giải pháp <span class="chart-note">(theo ARR)</span></div>
+        <div class="donut-wrap" id="donutSolution"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Theo loại hợp đồng <span class="chart-note">(theo ARR)</span></div>
+        <div class="donut-wrap" id="donutContract"></div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-head">
+        <div class="chart-title">Danh sách deal</div>
+        <div class="table-hint">Bấm vào một dòng để xem chi tiết</div>
+      </div>
+      <div class="table-scroll">
+        <table class="deal-table">
+          <thead>
+            <tr>
+              <th>Tên deal</th>
+              <th>Vai trò</th>
+              <th class="th-sort" id="sortDate">Ngày nhận ▾</th>
+              <th class="num">ARR</th>
+              <th>Trạng thái Go-live</th>
+              <th class="num">CHS_CS</th>
+            </tr>
+          </thead>
+          <tbody id="dealTbody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="tableEmpty" style="display:none;">Không có deal nào nhận trong khoảng thời gian này.<br>Thử nới rộng bộ lọc hoặc bấm “Tất cả”.</div>
+    </div>
+
+  </section>
+
+  <!-- TAB: FORECAST -->
+  <section class="tab-panel" id="panel-forecast" style="display:none;">
+    <div class="placeholder-card">
+      <h3>Forecast — sắp ra mắt</h3>
+      <p>Phần này sẽ gồm: radar mốc T1/T4, nhập what-if (%Active, %Output) cho từng deal và dự phóng CHS_CS + commission theo bảng com của policy. Build ở bước tiếp theo.</p>
+    </div>
+  </section>
+
+  <!-- TAB: DASHBOARD -->
+  <section class="tab-panel" id="panel-dashboard" style="display:none;">
+    <div class="placeholder-card">
+      <h3>Dashboard — sắp ra mắt</h3>
+      <p>Phần này sẽ gồm: health board theo tháng, tiến độ CR/SRR_1/SRR_4 so với mốc KPI / GOAL / OUT của level hiện tại. Build ở bước tiếp theo.</p>
+    </div>
+  </section>
+
+</main>
 
 <script src="config.js"></script>
 <script src="app.js"></script>

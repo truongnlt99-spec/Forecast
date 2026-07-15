@@ -1,20 +1,38 @@
 (function () {
+  'use strict';
+
   var CFG = window.CS_TOOL_CONFIG;
   var SESSION_KEY = 'cs_tool_session';
 
-  var loginScreen = document.getElementById('loginScreen');
-  var loginError = document.getElementById('loginError');
-  var dashboard = document.getElementById('dashboard');
-  var userBox = document.getElementById('userBox');
-  var userEmail = document.getElementById('userEmail');
-  var summaryBar = document.getElementById('summaryBar');
-  var dealGrid = document.getElementById('dealGrid');
-  var logoutBtn = document.getElementById('logoutBtn');
+  // ---------- DOM ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var loginScreen = $('loginScreen');
+  var loginError = $('loginError');
+  var tabNav = $('tabNav');
+  var userBox = $('userBox');
+  var userEmail = $('userEmail');
+  var logoutBtn = $('logoutBtn');
 
+  var panels = {
+    overview: $('panel-overview'),
+    forecast: $('panel-forecast'),
+    dashboard: $('panel-dashboard'),
+  };
+
+  // ---------- State ----------
+  var allDeals = [];   // normalized deals
+  var openDealId = null;
+  var sortDesc = true;
+  var CHART_COLORS = ['#2E4057', '#147D6F', '#C97A0E', '#7A5CB8', '#B8506E', '#4C8C2B', '#5A87B0', '#8A8F9C'];
+
+  // =========================================================
+  // AUTH (giữ nguyên flow cũ: GSI -> Apps Script API)
+  // =========================================================
   function showLogin(errorMsg) {
     loginScreen.style.display = 'flex';
-    dashboard.style.display = 'none';
+    tabNav.style.display = 'none';
     userBox.style.display = 'none';
+    Object.keys(panels).forEach(function (k) { panels[k].style.display = 'none'; });
     if (errorMsg) {
       loginError.textContent = errorMsg;
       loginError.style.display = 'block';
@@ -23,14 +41,14 @@
     }
   }
 
-  function showDashboard(email) {
+  function showApp(email) {
     loginScreen.style.display = 'none';
-    dashboard.style.display = 'block';
+    tabNav.style.display = 'flex';
     userBox.style.display = 'flex';
     userEmail.textContent = email;
+    switchTab('overview');
   }
 
-  // ---------- Google Identity Services ----------
   function initGoogle() {
     google.accounts.id.initialize({
       client_id: CFG.CLIENT_ID,
@@ -38,19 +56,15 @@
       auto_select: true,
       callback: handleCredential,
     });
-    google.accounts.id.renderButton(document.getElementById('gsiButton'), {
-      theme: 'outline',
-      size: 'large',
-      text: 'signin_with',
+    google.accounts.id.renderButton($('gsiButton'), {
+      theme: 'outline', size: 'large', text: 'signin_with',
     });
-    // Thử tự đăng nhập im lặng nếu thiết bị này đã từng đăng nhập Google trước đó
     google.accounts.id.prompt();
   }
 
   function handleCredential(response) {
-    var token = response.credential;
     localStorage.setItem(SESSION_KEY, JSON.stringify({ ts: Date.now() }));
-    loadDeals(token);
+    loadDeals(response.credential);
   }
 
   function logout() {
@@ -59,99 +73,488 @@
     showLogin();
   }
 
-  // ---------- Data ----------
   function loadDeals(token) {
     fetch(CFG.API_URL + '?token=' + encodeURIComponent(token))
       .then(function (r) { return r.text(); })
       .then(function (text) { return JSON.parse(text); })
       .then(function (data) {
-        if (!data.ok) {
-          showLogin(data.error || 'Không đăng nhập được.');
-          return;
-        }
-        showDashboard(data.email);
-        render(data.deals);
+        if (!data.ok) { showLogin(data.error || 'Không đăng nhập được.'); return; }
+        allDeals = (data.deals || []).map(normalizeDeal);
+        showApp(data.email);
+        setDefaultDateRange();
+        renderOverview();
       })
       .catch(function () {
         showLogin('Không kết nối được tới dữ liệu. Thử tải lại trang.');
       });
   }
 
-  function pickField(keys, candidates) {
-    for (var i = 0; i < candidates.length; i++) {
-      if (keys.indexOf(candidates[i]) !== -1) return candidates[i];
+  // =========================================================
+  // NORMALIZE DATA (bám theo cột tab "Data base")
+  // =========================================================
+  function findKey(keys, patterns) {
+    for (var i = 0; i < patterns.length; i++) {
+      var p = patterns[i].toLowerCase();
+      for (var j = 0; j < keys.length; j++) {
+        if (keys[j].toLowerCase().indexOf(p) !== -1) return keys[j];
+      }
     }
     return null;
   }
 
-  function bandOf(score) {
-    var n = Number(score);
-    if (isNaN(n)) return { cls: '', label: '' };
-    if (n <= 20) return { cls: 'band-risk', label: 'At Risk' };
-    if (n <= 50) return { cls: 'band-weak', label: 'Weak' };
-    if (n <= 70) return { cls: 'band-healthy', label: 'Healthy' };
-    return { cls: 'band-strong', label: 'Strong' };
+  var KEYMAP = null;
+  function buildKeymap(sample) {
+    var keys = Object.keys(sample);
+    KEYMAP = {
+      id:        findKey(keys, ['deal id']),
+      name:      findKey(keys, ['tên khách hàng', 'khách hàng', 'company']),
+      role:      findKey(keys, ['vai trò']),
+      segment:   findKey(keys, ['phân khúc']),
+      solution:  findKey(keys, ['bộ giải pháp']),
+      arr:       findKey(keys, ['arr']),
+      tier:      findKey(keys, ['tier']),
+      users:     findKey(keys, ['số user', 'user được phân quyền']),
+      contract:  findKey(keys, ['loại hợp đồng']),
+      received:  findKey(keys, ['ngày nhận']),
+      ttgl:      findKey(keys, ['ttgl']),
+      glPlan:    findKey(keys, ['go-live dự kiến', 'golive dự kiến']),
+      glActual:  findKey(keys, ['go-live thực tế', 'golive thực tế']),
+      glStatus:  findKey(keys, ['trạng thái go-live', 'trạng thái golive']),
+      crMonth:   findKey(keys, ['tháng ghi nhận']),
+      pctActive: findKey(keys, ['%active', 'active user']),
+      pctOutput: findKey(keys, ['%output', 'output hoàn thành']),
+      uPoint:    findKey(keys, ['điểm u']),
+      chs:       findKey(keys, ['chs_cs', 'chs']),
+      health:    findKey(keys, ['xếp loại']),
+    };
   }
 
-  function render(deals) {
-    var counts = { risk: 0, weak: 0, healthy: 0, strong: 0 };
-    dealGrid.innerHTML = '';
+  function parseDate(v) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    var s = String(v).trim();
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // dd/mm/yyyy
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    var d = new Date(s); // ISO từ Apps Script
+    return isNaN(d) ? null : d;
+  }
 
-    if (!deals.length) {
-      dealGrid.innerHTML = '<div class="empty">Chưa có deal nào gắn với email này trong tab Database.<br>Kiểm tra lại cột "Email phụ trách".</div>';
-      summaryBar.innerHTML = '';
-      return;
+  function parseMoney(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return v;
+    var digits = String(v).replace(/[^\d]/g, '');
+    return digits ? Number(digits) : null;
+  }
+
+  function parseNum(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return v;
+    var n = Number(String(v).replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim());
+    if (!isNaN(n)) return n;
+    n = Number(String(v).replace(/%/g, '').replace(',', '.').trim());
+    return isNaN(n) ? null : n;
+  }
+
+  function parsePct(v) {
+    var n;
+    if (typeof v === 'number') { n = v; }
+    else {
+      if (v == null || String(v).trim() === '') return null;
+      n = Number(String(v).replace('%', '').replace(',', '.').trim());
+      if (isNaN(n)) return null;
     }
-
-    var keys = Object.keys(deals[0]);
-    var titleKey = pickField(keys, ['Company', 'Tên khách hàng', 'Khách hàng', 'Company Name', 'Tên công ty']) || keys[0];
-    var chsKey = keys.find(function (k) { return k.toUpperCase().indexOf('CHS') !== -1; });
-
-    deals.forEach(function (deal) {
-      var band = chsKey ? bandOf(deal[chsKey]) : { cls: '', label: '' };
-      if (band.cls === 'band-risk') counts.risk++;
-      else if (band.cls === 'band-weak') counts.weak++;
-      else if (band.cls === 'band-healthy') counts.healthy++;
-      else if (band.cls === 'band-strong') counts.strong++;
-
-      var card = document.createElement('div');
-      card.className = 'deal-card ' + band.cls;
-
-      var metaHtml = '';
-      keys.forEach(function (k) {
-        if (k === titleKey || k === 'Email phụ trách') return;
-        metaHtml += '<span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(deal[k]) + '</span>';
-      });
-
-      card.innerHTML =
-        '<div class="top-row">' +
-          '<div class="company">' + escapeHtml(deal[titleKey]) + '</div>' +
-          (band.label ? '<span class="badge ' + band.cls + '">' + band.label + '</span>' : '') +
-        '</div>' +
-        '<div class="meta">' + metaHtml + '</div>';
-
-      dealGrid.appendChild(card);
-    });
-
-    summaryBar.innerHTML =
-      summaryCell(deals.length, 'Tổng số deal') +
-      summaryCell(counts.risk, 'At Risk') +
-      summaryCell(counts.weak, 'Weak') +
-      summaryCell(counts.healthy + counts.strong, 'Healthy / Strong');
+    if (n > 0 && n <= 1) n = n * 100; // sheet trả 0.28 thay vì 28
+    return Math.round(n * 10) / 10;
   }
 
-  function summaryCell(num, label) {
-    return '<div class="summary-cell"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
+  function parseChs(v) {
+    if (v == null || String(v).trim() === '') return null;
+    if (typeof v === 'number') return v;
+    var n = Number(String(v).replace(',', '.').trim());
+    return isNaN(n) ? null : n;
   }
 
-  function escapeHtml(v) {
+  function healthBand(chs, label) {
+    if (chs != null) {
+      if (chs <= 20) return 'risk';
+      if (chs <= 50) return 'weak';
+      if (chs <= 70) return 'healthy';
+      return 'strong';
+    }
+    var s = String(label || '').toLowerCase();
+    if (s.indexOf('risk') !== -1) return 'risk';
+    if (s.indexOf('weak') !== -1) return 'weak';
+    if (s.indexOf('strong') !== -1) return 'strong';
+    if (s.indexOf('healthy') !== -1) return 'healthy';
+    return 'none';
+  }
+
+  function normalizeDeal(raw) {
+    if (!KEYMAP) buildKeymap(raw);
+    var K = KEYMAP;
+    var get = function (k) { return k ? raw[k] : null; };
+    var chs = parseChs(get(K.chs));
+    return {
+      raw: raw,
+      id: String(get(K.id) || ''),
+      name: String(get(K.name) || '—'),
+      role: String(get(K.role) || ''),
+      segment: String(get(K.segment) || ''),
+      solution: String(get(K.solution) || 'Khác'),
+      arr: parseMoney(get(K.arr)),
+      tier: get(K.tier),
+      users: parseNum(get(K.users)),
+      contract: String(get(K.contract) || 'Khác'),
+      received: parseDate(get(K.received)),
+      ttgl: parseNum(get(K.ttgl)),
+      glPlan: parseDate(get(K.glPlan)),
+      glActual: parseDate(get(K.glActual)),
+      glStatus: String(get(K.glStatus) || ''),
+      crMonth: String(get(K.crMonth) || ''),
+      pctActive: parsePct(get(K.pctActive)),
+      pctOutput: parsePct(get(K.pctOutput)),
+      uPoint: parseNum(get(K.uPoint)),
+      chs: chs,
+      band: healthBand(chs, get(K.health)),
+    };
+  }
+
+  // =========================================================
+  // FORMAT HELPERS
+  // =========================================================
+  function fmtMoney(n) {
+    if (n == null) return '—';
+    return n.toLocaleString('vi-VN') + ' đ';
+  }
+  function fmtMoneyShort(n) {
+    if (n == null) return '—';
+    if (n >= 1e9) return (Math.round(n / 1e7) / 100).toLocaleString('vi-VN') + ' tỷ';
+    if (n >= 1e6) return Math.round(n / 1e6).toLocaleString('vi-VN') + 'tr';
+    return n.toLocaleString('vi-VN') + ' đ';
+  }
+  function fmtDate(d) {
+    if (!d) return '—';
+    return String(d.getDate()).padStart(2, '0') + '/' +
+           String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  }
+  function toInputDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  var BAND_LABEL = { strong: 'Strong', healthy: 'Healthy', weak: 'Weak', risk: 'At Risk', none: 'Chưa có CHS' };
 
+  // =========================================================
+  // FILTER
+  // =========================================================
+  function setDefaultDateRange() {
+    var now = new Date();
+    var first = new Date(now.getFullYear(), now.getMonth(), 1);
+    $('dateFrom').value = toInputDate(first);
+    $('dateTo').value = toInputDate(now);
+    setActiveChip('month');
+  }
+
+  function setActiveChip(preset) {
+    document.querySelectorAll('.chip').forEach(function (c) {
+      c.classList.toggle('active', c.getAttribute('data-preset') === preset);
+    });
+  }
+
+  function applyPreset(preset) {
+    var now = new Date();
+    var from = null, to = now;
+    if (preset === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (preset === 'quarter') from = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    else if (preset === 'year') from = new Date(now.getFullYear(), 0, 1);
+    else if (preset === 'all') { from = null; to = null; }
+    $('dateFrom').value = from ? toInputDate(from) : '';
+    $('dateTo').value = to ? toInputDate(to) : '';
+    setActiveChip(preset);
+    renderOverview();
+  }
+
+  function getFilteredDeals() {
+    var fromV = $('dateFrom').value;
+    var toV = $('dateTo').value;
+    var from = fromV ? new Date(fromV + 'T00:00:00') : null;
+    var to = toV ? new Date(toV + 'T23:59:59') : null;
+    return allDeals.filter(function (d) {
+      if (!d.received) return !from && !to; // deal thiếu ngày nhận chỉ hiện khi xem "Tất cả"
+      if (from && d.received < from) return false;
+      if (to && d.received > to) return false;
+      return true;
+    });
+  }
+
+  // =========================================================
+  // RENDER: TỔNG QUAN
+  // =========================================================
+  function renderOverview() {
+    var deals = getFilteredDeals();
+    openDealId = null;
+
+    $('filterCount').innerHTML = '<strong>' + deals.length + '</strong> / ' + allDeals.length + ' deal';
+
+    renderKpis(deals);
+    renderHealthStrip(deals);
+    renderDonut('donutSolution', groupBy(deals, 'solution'));
+    renderDonut('donutContract', groupBy(deals, 'contract'));
+    renderTable(deals);
+  }
+
+  function renderKpis(deals) {
+    var totalArr = 0, glArr = 0, glCount = 0;
+    deals.forEach(function (d) {
+      if (d.arr) totalArr += d.arr;
+      if (/đã go/i.test(d.glStatus)) { glCount++; if (d.arr) glArr += d.arr; }
+    });
+    $('kpiRevenue').textContent = fmtMoney(totalArr);
+    $('kpiRevenueSub').textContent = deals.length
+      ? 'Đã Go-live: ' + fmtMoneyShort(glArr) + ' (' + glCount + '/' + deals.length + ' deal)'
+      : '';
+
+    var scored = deals.filter(function (d) { return d.chs != null; });
+    if (scored.length) {
+      var avg = scored.reduce(function (s, d) { return s + d.chs; }, 0) / scored.length;
+      avg = Math.round(avg * 10) / 10;
+      $('kpiChs').textContent = String(avg).replace('.', ',');
+      $('kpiChs').style.color = 'var(--' + healthBand(avg) + ')';
+      $('kpiChsSub').textContent = 'Trên ' + scored.length + ' deal đã có điểm';
+    } else {
+      $('kpiChs').textContent = '—';
+      $('kpiChs').style.color = '';
+      $('kpiChsSub').textContent = 'Chưa có deal nào được chấm CHS_CS';
+    }
+
+    var counts = countBands(deals);
+    var order = ['strong', 'healthy', 'weak', 'risk', 'none'];
+    var cls = { strong: 'hp-strong', healthy: 'hp-healthy', weak: 'hp-weak', risk: 'hp-risk', none: 'hp-none' };
+    $('healthCounts').innerHTML = order.map(function (b) {
+      return '<span class="health-pill ' + cls[b] + '"><span class="n">' + counts[b] + '</span> ' + BAND_LABEL[b] + '</span>';
+    }).join('');
+  }
+
+  function countBands(deals) {
+    var c = { strong: 0, healthy: 0, weak: 0, risk: 0, none: 0 };
+    deals.forEach(function (d) { c[d.band] = (c[d.band] || 0) + 1; });
+    return c;
+  }
+
+  function renderHealthStrip(deals) {
+    var c = countBands(deals);
+    var total = deals.length || 1;
+    var order = ['strong', 'healthy', 'weak', 'risk', 'none'];
+    $('healthStrip').innerHTML = order.map(function (b) {
+      var pct = (c[b] / total) * 100;
+      if (!pct) return '';
+      return '<div class="seg seg-' + b + '" style="flex-basis:' + pct + '%" title="' +
+        BAND_LABEL[b] + ': ' + c[b] + ' deal"></div>';
+    }).join('');
+  }
+
+  function groupBy(deals, field) {
+    var map = {};
+    deals.forEach(function (d) {
+      var k = d[field] || 'Khác';
+      if (!map[k]) map[k] = { name: k, arr: 0, count: 0 };
+      map[k].arr += d.arr || 0;
+      map[k].count += 1;
+    });
+    return Object.values(map).sort(function (a, b) { return b.arr - a.arr; });
+  }
+
+  function renderDonut(containerId, groups) {
+    var el = $(containerId);
+    var total = groups.reduce(function (s, g) { return s + g.arr; }, 0);
+    var count = groups.reduce(function (s, g) { return s + g.count; }, 0);
+
+    if (!groups.length || !total) {
+      el.innerHTML = '<div class="empty" style="padding:20px;width:100%;">Không có dữ liệu trong bộ lọc.</div>';
+      return;
+    }
+
+    var size = 130, r = 50, cx = size / 2, cy = size / 2, stroke = 18;
+    var circ = 2 * Math.PI * r;
+    var offset = 0;
+    var segs = groups.map(function (g, i) {
+      var frac = g.arr / total;
+      var len = frac * circ;
+      var s = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none"' +
+        ' stroke="' + CHART_COLORS[i % CHART_COLORS.length] + '" stroke-width="' + stroke + '"' +
+        ' stroke-dasharray="' + len + ' ' + (circ - len) + '"' +
+        ' stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+      offset += len;
+      return s;
+    }).join('');
+
+    var svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="Biểu đồ cơ cấu">' +
+      segs +
+      '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" class="donut-center-num">' + fmtMoneyShort(total) + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 13) + '" text-anchor="middle" class="donut-center-lbl">' + count + ' deal</text>' +
+      '</svg>';
+
+    var legend = '<div class="legend">' + groups.map(function (g, i) {
+      var pct = Math.round((g.arr / total) * 100);
+      return '<div class="legend-item">' +
+        '<span class="legend-dot" style="background:' + CHART_COLORS[i % CHART_COLORS.length] + '"></span>' +
+        '<span class="legend-name">' + esc(g.name) + '</span>' +
+        '<span class="legend-val">' + pct + '% · ' + fmtMoneyShort(g.arr) + ' · ' + g.count + ' deal</span>' +
+        '</div>';
+    }).join('') + '</div>';
+
+    el.innerHTML = svg + legend;
+  }
+
+  // ---------- Table ----------
+  function glBadge(status) {
+    var s = String(status || '');
+    if (/đã go/i.test(s)) return '<span class="badge gl-done">' + esc(s) + '</span>';
+    if (/quá hạn/i.test(s)) return '<span class="badge gl-overdue">' + esc(s) + '</span>';
+    if (s) return '<span class="badge gl-doing">' + esc(s) + '</span>';
+    return '—';
+  }
+
+  function chsBadge(deal) {
+    if (deal.chs == null) return '<span class="badge chs-none">—</span>';
+    var v = String(Math.round(deal.chs * 10) / 10).replace('.', ',');
+    return '<span class="badge chs-' + deal.band + '">' + v + '</span>';
+  }
+
+  function renderTable(deals) {
+    var tbody = $('dealTbody');
+    var empty = $('tableEmpty');
+    var sorted = deals.slice().sort(function (a, b) {
+      var ta = a.received ? a.received.getTime() : 0;
+      var tb = b.received ? b.received.getTime() : 0;
+      return sortDesc ? tb - ta : ta - tb;
+    });
+    $('sortDate').textContent = 'Ngày nhận ' + (sortDesc ? '▾' : '▴');
+
+    if (!sorted.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    tbody.innerHTML = sorted.map(function (d) {
+      return '<tr class="deal-row band-' + d.band + '" data-id="' + esc(d.id) + '">' +
+        '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
+        '<td><span class="badge role">' + esc(d.role || '—') + '</span></td>' +
+        '<td>' + fmtDate(d.received) + '</td>' +
+        '<td class="num">' + fmtMoney(d.arr) + '</td>' +
+        '<td>' + glBadge(d.glStatus) + '</td>' +
+        '<td class="num">' + chsBadge(d) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    tbody.querySelectorAll('tr.deal-row').forEach(function (tr) {
+      tr.addEventListener('click', function () { toggleDetail(tr, sorted); });
+    });
+  }
+
+  function toggleDetail(tr, deals) {
+    var id = tr.getAttribute('data-id');
+    var existing = document.querySelector('tr.detail-row');
+    var wasOpen = openDealId === id;
+
+    if (existing) existing.remove();
+    document.querySelectorAll('tr.deal-row.open').forEach(function (r) { r.classList.remove('open'); });
+    openDealId = null;
+    if (wasOpen) return;
+
+    var deal = deals.find(function (d) { return d.id === id; });
+    if (!deal) return;
+
+    openDealId = id;
+    tr.classList.add('open');
+
+    var items = [
+      ['Phân khúc', deal.segment || '—'],
+      ['Bộ giải pháp', deal.solution || '—'],
+      ['Tier', deal.tier != null && deal.tier !== '' ? 'Tier ' + deal.tier : '—'],
+      ['Số user phân quyền', deal.users != null ? deal.users.toLocaleString('vi-VN') : '—'],
+      ['Loại hợp đồng', deal.contract || '—'],
+      ['TTGL quy định', deal.ttgl != null ? deal.ttgl + ' ngày' : '—'],
+      ['Go-live dự kiến', fmtDate(deal.glPlan)],
+      ['Go-live thực tế', fmtDate(deal.glActual)],
+      ['Tháng ghi nhận CR', deal.crMonth || '—'],
+      ['Điểm U quy đổi', deal.uPoint != null ? deal.uPoint : '—'],
+      ['CHS_CS', deal.chs != null ? String(deal.chs).replace('.', ',') + ' điểm' : 'Chưa chấm'],
+      ['Xếp loại', BAND_LABEL[deal.band]],
+    ];
+
+    var grid = '<div class="detail-grid">' + items.map(function (it) {
+      return '<div class="detail-item"><span class="k">' + esc(it[0]) + '</span><span class="v">' + esc(it[1]) + '</span></div>';
+    }).join('') + '</div>';
+
+    var bars = '';
+    if (deal.pctActive != null || deal.pctOutput != null) {
+      bars = '<div class="mini-bars">' +
+        miniBar('%Active User (tháng hiện tại)', deal.pctActive) +
+        miniBar('%Output hoàn thành (tháng hiện tại)', deal.pctOutput) +
+        '</div>';
+    }
+
+    var detail = document.createElement('tr');
+    detail.className = 'detail-row';
+    detail.innerHTML = '<td colspan="6">' + grid + bars + '</td>';
+    tr.parentNode.insertBefore(detail, tr.nextSibling);
+  }
+
+  function miniBar(label, pct) {
+    if (pct == null) return '';
+    var v = Math.max(0, Math.min(100, pct));
+    return '<div class="mini-bar">' +
+      '<div class="mb-head"><span>' + esc(label) + '</span><b>' + String(pct).replace('.', ',') + '%</b></div>' +
+      '<div class="mini-track"><div class="mini-fill" style="width:' + v + '%"></div></div>' +
+      '</div>';
+  }
+
+  // =========================================================
+  // TABS
+  // =========================================================
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('active', t.getAttribute('data-tab') === name);
+    });
+    Object.keys(panels).forEach(function (k) {
+      panels[k].style.display = k === name ? 'block' : 'none';
+    });
+  }
+
+  // =========================================================
+  // EVENTS
+  // =========================================================
   logoutBtn.addEventListener('click', logout);
 
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () { switchTab(t.getAttribute('data-tab')); });
+  });
+
+  document.querySelectorAll('.chip').forEach(function (c) {
+    c.addEventListener('click', function () { applyPreset(c.getAttribute('data-preset')); });
+  });
+
+  ['dateFrom', 'dateTo'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+      setActiveChip('');
+      renderOverview();
+    });
+  });
+
+  $('sortDate').addEventListener('click', function () {
+    sortDesc = !sortDesc;
+    renderTable(getFilteredDeals());
+  });
+
+  // =========================================================
+  // BOOT
+  // =========================================================
   window.onload = function () {
     if (!CFG.CLIENT_ID || CFG.CLIENT_ID.indexOf('DIEN_') === 0) {
       showLogin('Chưa cấu hình CLIENT_ID trong config.js — xem README.md.');
