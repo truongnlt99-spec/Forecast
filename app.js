@@ -585,15 +585,28 @@
     
     if (logo) logo.classList.add('hidden');
     if (spinner) spinner.classList.remove('hidden');
-    if (text) text.textContent = 'Connecting…';
+    if (text) text.textContent = 'Opening Google...';
     if (btn) btn.setAttribute('disabled', '');
 
-    // Trigger Google prompt
+    // Thay vì prompt(), dùng renderButton + One Tap flow
     setTimeout(function () {
       if (window.google && google.accounts && google.accounts.id) {
-        google.accounts.id.prompt();
+        try {
+          // One Tap: popup phía trên
+          google.accounts.id.prompt(function(notification) {
+            console.log('Google prompt:', notification.isNotDisplayed(), notification.getNotDisplayedReason());
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+              // Nếu One Tap không show được → reset button, user try lại
+              console.warn('One Tap not available, fallback to prompt UI');
+              resetGoogleButton();
+            }
+          });
+        } catch (err) {
+          console.error('Google sign-in error:', err);
+          resetGoogleButton();
+        }
       }
-    }, 100);
-  };
+    }, 300);
+};
 
 })();
