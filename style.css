@@ -509,3 +509,14 @@ body.app-mode .login-screen { display: none; }
   .fc-kpis { grid-template-columns: 1fr 1fr; }
   .fc-bar  { flex-direction: column; align-items: stretch; }
 }
+
+/* Highlight ô vừa edit */
+.fc-in.fc-edited {
+  background-color: #FFF9E6;
+  border-color: #F0B500 !important;
+  box-shadow: 0 0 0 2px rgba(240, 181, 0, 0.15);
+}
+.fc-in.fc-edited:focus {
+  outline: 2px solid #F0B500;
+  outline-offset: -1px;
+}

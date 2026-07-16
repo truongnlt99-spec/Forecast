@@ -681,13 +681,7 @@ function loadDeals(token) {
   }
 
   function fcSeed() {
-    fcState = {};
-    fcDeals.forEach(function (d) {
-      fcState[d.id] = {
-        goLive: d.glActual0 ? fmtDate(d.glActual0) : '',
-        aT1: d.aT1_0, oT1: d.oT1_0, aT4: d.aT4_0, oT4: d.oT4_0,
-      };
-    });
+    fcState = {};  // leave empty, only populate when user edits
   }
 
   function fcUPoint(t, a) {
@@ -813,8 +807,16 @@ function loadDeals(token) {
     tb.innerHTML = fcDeals.map(function (d) {
       var r = fcCompute(d);
       var inp = function (f, cls, v) {
-        return '<input class="fc-in ' + cls + '" data-id="' + esc(d.id) + '" data-f="' + f + '" value="' + esc(v == null ? '' : v) + '"'
-             + (f === 'goLive' ? ' placeholder="dd/mm/yyyy"' : '') + '>';
+        var type = (f === 'goLive') ? 'date' : 'number';
+        var placeholder = (f === 'goLive') ? '' : (cls.indexOf('pct') > -1 ? '0-100' : '');
+        var dateVal = '';
+        if (f === 'goLive' && v) {
+          var m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (m) dateVal = m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+        }
+        var displayVal = (type === 'date') ? dateVal : (fcState[d.id] && fcState[d.id][field] !== undefined ? fcState[d.id][field] : (origVal == null ? '' : origVal));
+        return '<input class="fc-in ' + cls + '" type="' + type + '" data-id="' + esc(d.id) + '" data-f="' + f + '" value="' + esc(displayVal) + '"'
+             + (placeholder ? ' placeholder="' + placeholder + '"' : '') + (type === 'number' && cls.indexOf('pct') > -1 ? ' min="0" max="100"' : '') + '>';
       };
       return '<tr id="fc-row-' + esc(d.id) + '">' +
         '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
@@ -843,8 +845,20 @@ function loadDeals(token) {
 
   function fcEdit(id, field, val) {
     if (field !== 'goLive') { val = (val === '' ? null : (isNaN(+val) ? null : +val)); }
+    var d = fcDeals.find(function (x) { return x.id === id; });
+    if (!d) return;
+    // Compare with original value
+    var origVal = null;
+    if (field === 'goLive') origVal = d.glActual0 ? fmtDate(d.glActual0) : '';
+    else if (field === 'aT1') origVal = d.aT1_0;
+    else if (field === 'oT1') origVal = d.oT1_0;
+    else if (field === 'aT4') origVal = d.aT4_0;
+    else if (field === 'oT4') origVal = d.oT4_0;
+    if (val === origVal) { if (fcState[id]) delete fcState[id][field]; return; } // remove from edit if reset to original
     if (!fcState[id]) fcState[id] = {};
     fcState[id][field] = val;
+    var el = document.querySelector('[data-id="' + id + '"][data-f="' + field + '"]');
+    if (el) el.classList.add('fc-edited');
     fcUpdateRow(id);
     fcRenderKpis();
     fcFlag('• chưa lưu về sheet');
@@ -861,20 +875,41 @@ function loadDeals(token) {
   function fcSave() {
     if (!fcDeals) return;
     var token = localStorage.getItem('cs_tool_token');
-    var payload = fcDeals.map(function (d) {
-      var e = fcState[d.id] || {};
-      return { dealId: d.id, goLive: e.goLive || '', aT1: e.aT1, oT1: e.oT1, aT4: e.aT4, oT4: e.oT4 };
+    var edited = [];
+    fcDeals.forEach(function (d) {
+      if (fcState[d.id]) {
+        var e = fcState[d.id];
+        var gl = e.goLive || '';
+        // convert HTML5 date (yyyy-mm-dd) back to dd/mm/yyyy
+        if (gl.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          var p = gl.split('-');
+          gl = p[2] + '/' + p[1] + '/' + p[0];
+        }
+        edited.push({ 
+          dealId: d.id, goLive: gl,
+          aT1: (e.aT1 !== undefined) ? e.aT1 : d.aT1_0,
+          oT1: (e.oT1 !== undefined) ? e.oT1 : d.oT1_0,
+          aT4: (e.aT4 !== undefined) ? e.aT4 : d.aT4_0,
+          oT4: (e.oT4 !== undefined) ? e.oT4 : d.oT4_0,
+        });
+      }
     });
-    fcFlag('đang lưu…');
+    if (edited.length === 0) { fcFlag('không có gì để lưu'); return; }
+    fcFlag('đang lưu ' + edited.length + ' deal…');
     fetch(CFG.API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // tránh CORS preflight
-      body: JSON.stringify({ token: token, rows: payload }),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: token, rows: edited }),
     })
       .then(function (r) { return r.text(); })
       .then(function (text) {
         var d; try { d = JSON.parse(text); } catch (e) { d = { ok: true }; }
-        fcFlag(d.ok ? ('✓ đã lưu ' + (d.saved != null ? d.saved + ' deal · ' : '') + new Date().toLocaleTimeString('vi-VN')) : '⚠ lưu lỗi');
+        if (d.ok) {
+          document.querySelectorAll('.fc-in.fc-edited').forEach(function(el) { el.classList.remove('fc-edited'); });
+          fcFlag('✓ đã lưu ' + edited.length + ' deal · ' + new Date().toLocaleTimeString('vi-VN'));
+        } else {
+          fcFlag('⚠ lưu lỗi');
+        }
       })
       .catch(function (err) { fcFlag('⚠ lưu lỗi: ' + err.message); });
   }
