@@ -9,6 +9,7 @@
   var tabNav = $('tabNav');
   var userEmail = $('userEmail');
   var logoutBtn = $('logoutBtn');
+  var refreshBtn = $('refreshBtn');
 
   var panels = {
     overview: $('panel-overview'),
@@ -22,6 +23,39 @@
   var sortDesc = true;
   var CHART_COLORS = ['#4C6FFF', '#7C5CFC', '#22A06B', '#E39230', '#D93B3B', '#147D6F', '#4C8C2B', '#C97A0E'];
 
+  // Staleness tracking — quyết định khi nào tự âm thầm tải lại dữ liệu khi chuyển tab
+  var STALE_MS = 5 * 60 * 1000; // 5 phút
+  var lastFetchOverview = 0;
+  var lastFetchForecast = 0;
+
+  // =========================================================
+  // TOAST — thay cho alert() bị chặn/khó nhìn thấy, và để mọi
+  // lỗi (kể cả lỗi JS không lường trước) đều hiện ra cho người dùng thấy
+  // thay vì im lặng biến mất.
+  // =========================================================
+  var toastTimer = null;
+  function showToast(msg, type, ms) {
+    var el = $('toast');
+    if (!el) { console.warn('[toast]', msg); return; }
+    el.textContent = msg;
+    el.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.className = 'toast'; }, ms || 5000);
+  }
+
+  // Bắt mọi lỗi JS / promise rejection không lường trước — đảm bảo
+  // không có trường hợp nào "tải im lặng, hỏng im lặng, không báo gì" nữa.
+  window.addEventListener('error', function (e) {
+    var msg = (e.error && e.error.message) ? e.error.message : e.message;
+    console.error('Uncaught error:', e.error || e.message);
+    showToast('Có lỗi xảy ra: ' + msg, 'err', 7000);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason);
+    console.error('Unhandled promise rejection:', e.reason);
+    showToast('Có lỗi xảy ra: ' + msg, 'err', 7000);
+  });
+
   // =========================================================
   // UI MODE (login vs app)
   // =========================================================
@@ -32,41 +66,62 @@
 
   function showApp(email) {
     userEmail.textContent = email;
-    switchTab('overview');
-    setUiMode('app');
+    // Chỉ chuyển màn hình + về tab Tổng quan ở lần đăng nhập thực sự đầu tiên.
+    // Nếu đây là một lần tải nền (silent refresh khi token hết hạn, hoặc auto-refresh
+    // khi dữ liệu cũ) thì user đang ở tab nào cứ để yên tab đó, đừng nhảy tab.
+    if (document.body.className !== 'app-mode') {
+      switchTab('overview');
+      setUiMode('app');
+    }
   }
 
   function logout() {
     try { google.accounts.id.disableAutoSelect(); } catch (e) {}
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem('cs_tool_token');
+    silentReauthInProgress = false;
+    lastFetchOverview = 0; lastFetchForecast = 0;
     setUiMode('login');
   }
 
   // =========================================================
   // AUTH: Google Sign-in + API call
   // =========================================================
-function loadDeals(token) {
+function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     fetch(CFG.API_URL + '?token=' + encodeURIComponent(token))
       .then(function (r) { return r.text(); })
       .then(function (text) { return JSON.parse(text); })
       .then(function (data) {
-        if (!data.ok) { 
+        if (!data.ok) {
           localStorage.removeItem('cs_tool_token');
           localStorage.removeItem(SESSION_KEY);
-          alert('Phiên đăng nhập đã hết hạn, mời đăng nhập lại.');
+          if (silentRetryOnFail) {
+            // Token cũ hết hạn — thử âm thầm lấy token mới từ Google trước,
+            // chỉ bắt bấm nút "Continue with Google" nếu việc này cũng không được
+            // (tránh tình trạng "treo im", không tải được gì mà cũng không báo gì).
+            silentReauthInProgress = true;
+            trySilentSignIn(function () {
+              silentReauthInProgress = false;
+              showToast('Phiên đăng nhập đã hết hạn, mời đăng nhập lại.', 'err');
+              resetGoogleButton();
+              setUiMode('login');
+            });
+            return;
+          }
+          showToast('Phiên đăng nhập đã hết hạn, mời đăng nhập lại.', 'err');
           resetGoogleButton();
           setUiMode('login');
-          return; 
+          return;
         }
         allDeals = (data.deals || []).map(normalizeDeal);
+        lastFetchOverview = Date.now();
         showApp(data.email);
-        setDefaultDateRange();
+        if (!isBackgroundRefresh) setDefaultDateRange();
         renderOverview();
       })
       .catch(function (err) {
-        alert('Không kết nối được tới dữ liệu: ' + err.message);
-        resetGoogleButton();
+        showToast('Không kết nối được tới dữ liệu: ' + err.message, 'err');
+        if (!isBackgroundRefresh) resetGoogleButton();
       });
   }
 
@@ -516,12 +571,33 @@ function loadDeals(token) {
       panels[k].style.display = k === name ? 'block' : 'none';
     });
     if (name === 'forecast') renderForecast();
+    if (name === 'overview' && Date.now() - lastFetchOverview > STALE_MS) {
+      var token = localStorage.getItem('cs_tool_token');
+      if (token) loadDeals(token, true, true); // background refresh, giữ nguyên bộ lọc đang chọn, thử silent reauth nếu token hết hạn
+    }
+  }
+
+  function manualRefresh() {
+    var token = localStorage.getItem('cs_tool_token');
+    if (!token) return;
+    var activeTab = document.querySelector('.tab.active');
+    var name = activeTab ? activeTab.getAttribute('data-tab') : 'overview';
+    if (name === 'forecast') {
+      if (Object.keys(fcState).length > 0 &&
+          !confirm('Bạn đang có ô sửa chưa lưu ở Forecast. Làm mới sẽ mất các thay đổi này. Tiếp tục?')) return;
+      fcState = {};
+      fcLoad();
+    } else {
+      loadDeals(token, true, true);
+    }
+    showToast('Đang làm mới dữ liệu…', 'ok', 2000);
   }
 
   // =========================================================
   // EVENTS
   // =========================================================
   logoutBtn.addEventListener('click', logout);
+  if (refreshBtn) refreshBtn.addEventListener('click', manualRefresh);
 
   document.querySelectorAll('.tab').forEach(function (t) {
     t.addEventListener('click', function () { switchTab(t.getAttribute('data-tab')); });
@@ -546,6 +622,8 @@ function loadDeals(token) {
   // =========================================================
   // BOOT: Check token & load app
   // =========================================================
+  var silentReauthInProgress = false; // để biết khi callback bắn về là do reload âm thầm hay do user tự bấm
+
   window.addEventListener('load', function () {
     if (!CFG.CLIENT_ID || CFG.CLIENT_ID.indexOf('DIEN_') === 0) {
       alert('Error: CLIENT_ID not configured in config.js');
@@ -562,12 +640,50 @@ function loadDeals(token) {
           client_id: CFG.CLIENT_ID,
           hd: CFG.ALLOWED_DOMAIN,
           callback: handleCredential,
+          auto_select: true,          // tự chọn tài khoản nếu chỉ có 1 tài khoản @base.vn đang đăng nhập trên trình duyệt
+          cancel_on_tap_outside: false,
         });
         var savedToken = localStorage.getItem('cs_tool_token');
-        if (savedToken) loadDeals(savedToken);
+        if (savedToken) {
+          // Token Google id_token chỉ sống ~1h theo thiết kế của Google (không phải bug của tool này).
+          // Khi hết hạn, thử âm thầm lấy token mới trước khi bắt user bấm nút lại.
+          loadDeals(savedToken, /* silentRetryOnFail */ true);
+        } else {
+          // Chưa từng đăng nhập / đã logout — thử âm thầm một lần, nếu không được thì
+          // vẫn hiện màn login bình thường (không cần làm gì thêm, đây là behavior mặc định).
+          trySilentSignIn();
+        }
       }
     }, 100);
   });
+
+  // =========================================================
+  // GOOGLE SIGN-IN: 1 hàm prompt() dùng chung, có khoá để tránh gọi
+  // chồng nhiều lần — đây là nguyên nhân của lỗi "AbortError: signal is
+  // aborted without reason" thấy trong console (gọi prompt() lần 2 khi
+  // lần 1 chưa xong sẽ tự abort lần 1).
+  // =========================================================
+  var promptInFlight = false;
+
+  function trySilentSignIn(onFail) {
+    if (promptInFlight) return;
+    if (!(window.google && google.accounts && google.accounts.id)) { if (onFail) onFail(); return; }
+    promptInFlight = true;
+    try {
+      google.accounts.id.prompt(function (notification) {
+        promptInFlight = false;
+        var reason = notification.getNotDisplayedReason ? notification.getNotDisplayedReason() : null;
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.log('Silent sign-in không khả dụng:', reason || notification.getSkippedReason && notification.getSkippedReason());
+          if (onFail) onFail();
+        }
+      });
+    } catch (err) {
+      promptInFlight = false;
+      console.error('Google sign-in error:', err);
+      if (onFail) onFail();
+    }
+  }
 
   // =========================================================
   // GLOBAL FUNCTION for HTML button click
@@ -576,7 +692,9 @@ function loadDeals(token) {
     var token = response.credential;
     localStorage.setItem('cs_tool_token', token);
     localStorage.setItem(SESSION_KEY, JSON.stringify({ ts: Date.now() }));
-    loadDeals(token);
+    var wasBackground = silentReauthInProgress; // true nếu đây là refresh âm thầm, không phải user vừa bấm nút
+    silentReauthInProgress = false;
+    loadDeals(token, false, wasBackground);
   }
 
   function resetGoogleButton() {
@@ -595,32 +713,20 @@ function loadDeals(token) {
     var spinner = document.getElementById('spinner');
     var text = document.getElementById('gtext');
     var btn = document.getElementById('gbtn');
-    
+
     if (logo) logo.classList.add('hidden');
     if (spinner) spinner.classList.remove('hidden');
     if (text) text.textContent = 'Opening Google...';
     if (btn) btn.setAttribute('disabled', '');
 
-    // Thay vì prompt(), dùng renderButton + One Tap flow
     setTimeout(function () {
-      if (window.google && google.accounts && google.accounts.id) {
-        try {
-          // One Tap: popup phía trên
-          google.accounts.id.prompt(function(notification) {
-            console.log('Google prompt:', notification.isNotDisplayed(), notification.getNotDisplayedReason());
-            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-              // Nếu One Tap không show được → reset button, user try lại
-              console.warn('One Tap not available, fallback to prompt UI');
-              resetGoogleButton();
-            }
-          });
-        } catch (err) {
-          console.error('Google sign-in error:', err);
-          resetGoogleButton();
-        }
-      }
+      trySilentSignIn(function () {
+        // One Tap / FedCM không hiện được (VD: trình duyệt chặn cookie bên thứ 3) → reset nút, user thử lại
+        console.warn('One Tap not available, fallback to prompt UI');
+        resetGoogleButton();
+      });
     }, 300);
-};
+  };
 
 
   // =========================================================
@@ -744,19 +850,29 @@ function loadDeals(token) {
 
   function renderForecast() {
     if (!fcLoaded) { fcLoad(); return; }
-    fcRenderKpis(); fcRenderTable();
+    try {
+      fcRenderKpis(); fcRenderTable();
+    } catch (err) {
+      console.error('renderForecast error:', err);
+      showToast('Lỗi hiển thị Forecast: ' + err.message, 'err');
+    }
+    // Dữ liệu đã cũ (> 5 phút) và không có ô nào đang sửa dở chưa lưu
+    // -> âm thầm tải lại bản mới nhất từ sheet, không làm gián đoạn màn hình.
+    if (Date.now() - lastFetchForecast > STALE_MS && Object.keys(fcState).length === 0) {
+      fcLoad(true);
+    }
   }
 
-  function fcLoad() {
+  function fcLoad(isBackgroundRefresh) {
     var token = localStorage.getItem('cs_tool_token');
     var empty = $('fcEmpty');
-    if (empty) { empty.style.display = 'block'; empty.textContent = 'Đang tải dữ liệu từ sheet Database…'; }
+    if (empty && !isBackgroundRefresh) { empty.style.display = 'block'; empty.textContent = 'Đang tải dữ liệu từ sheet Database…'; }
     fetch(CFG.API_URL + '?token=' + encodeURIComponent(token) + '&sheet=Database')
       .then(function (r) { return r.text(); })
       .then(function (text) { return JSON.parse(text); })
       .then(function (data) {
         if (!data.ok) {
-          if (empty) empty.textContent = 'Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại.';
+          if (empty) { empty.style.display = 'block'; empty.textContent = 'Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại.'; }
           localStorage.removeItem('cs_tool_token');
           localStorage.removeItem(SESSION_KEY);
           resetGoogleButton();
@@ -764,13 +880,18 @@ function loadDeals(token) {
           return;
         }
         fcDeals = (data.deals || []).map(fcNormalize).filter(function (d) { return d.id; });
-        fcSeed(); fcLoaded = true;
+        fcSeed(); fcLoaded = true; lastFetchForecast = Date.now();
         if (empty) empty.style.display = fcDeals.length ? 'none' : 'block';
         if (empty && !fcDeals.length) empty.textContent = 'Sheet Database chưa có deal nào.';
         fcRenderKpis(); fcRenderTable();
       })
       .catch(function (err) {
-        if (empty) empty.textContent = 'Không tải được dữ liệu forecast: ' + err.message;
+        console.error('fcLoad error:', err);
+        // Quan trọng: luôn hiện lại khối empty khi có lỗi, kể cả khi trước đó
+        // đã bị ẩn đi (display:none) — nếu không, lỗi sẽ không hiển thị gì cả
+        // dù textContent đã được set (đây chính là nguyên nhân bug "im lặng").
+        if (empty) { empty.style.display = 'block'; empty.textContent = 'Không tải được dữ liệu forecast: ' + err.message; }
+        showToast('Forecast: không tải được dữ liệu — ' + err.message, 'err');
       });
   }
 
@@ -810,15 +931,29 @@ function loadDeals(token) {
     var tb = $('fcTbody');
     tb.innerHTML = fcDeals.map(function (d) {
       var r = fcCompute(d);
-      var inp = function (f, cls, v) {
+      var inp = function (f, cls) {
         var type = (f === 'goLive') ? 'date' : 'number';
         var placeholder = (f === 'goLive') ? '' : (cls.indexOf('pct') > -1 ? '0-100' : '');
-        var dateVal = '';
-        if (f === 'goLive' && v) {
-          var m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-          if (m) dateVal = m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+        // Giá trị gốc lấy từ sheet Database (khi user chưa sửa gì)
+        var orig = (f === 'goLive') ? (d.glActual0 ? fmtDate(d.glActual0) : '')
+                 : (f === 'aT1') ? d.aT1_0
+                 : (f === 'oT1') ? d.oT1_0
+                 : (f === 'aT4') ? d.aT4_0
+                 : (f === 'oT4') ? d.oT4_0 : null;
+        // Nếu user đã sửa ô này (còn trong fcState, chưa lưu) thì ưu tiên giá trị đã sửa
+        var current = (fcState[d.id] && fcState[d.id][f] !== undefined) ? fcState[d.id][f] : orig;
+        var displayVal;
+        if (type === 'date') {
+          displayVal = '';
+          if (current) {
+            var s = String(current);
+            var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) displayVal = m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+            else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) displayVal = s; // đã ở định dạng input date
+          }
+        } else {
+          displayVal = (current == null ? '' : current);
         }
-        var displayVal = (type === 'date') ? dateVal : (fcState[d.id] && fcState[d.id][field] !== undefined ? fcState[d.id][field] : (origVal == null ? '' : origVal));
         return '<input class="fc-in ' + cls + '" type="' + type + '" data-id="' + esc(d.id) + '" data-f="' + f + '" value="' + esc(displayVal) + '"'
              + (placeholder ? ' placeholder="' + placeholder + '"' : '') + (type === 'number' && cls.indexOf('pct') > -1 ? ' min="0" max="100"' : '') + '>';
       };
@@ -826,11 +961,11 @@ function loadDeals(token) {
         '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
         '<td><span class="badge role">' + esc(d.contract) + '</span></td>' +
         '<td class="num">' + fmtMoneyShort(d.val) + '</td>' +
-        '<td class="fc-y fc-yL">' + inp('goLive', 'fc-date', r.gl) + '</td>' +
-        '<td class="fc-y num">' + inp('aT1', 'fc-pct', r.aT1) + '</td>' +
-        '<td class="fc-y num">' + inp('oT1', 'fc-pct', r.oT1) + '</td>' +
-        '<td class="fc-y num">' + inp('aT4', 'fc-pct', r.aT4) + '</td>' +
-        '<td class="fc-y num fc-yR">' + inp('oT4', 'fc-pct', r.oT4) + '</td>' +
+        '<td class="fc-y fc-yL">' + inp('goLive', 'fc-date') + '</td>' +
+        '<td class="fc-y num">' + inp('aT1', 'fc-pct') + '</td>' +
+        '<td class="fc-y num">' + inp('oT1', 'fc-pct') + '</td>' +
+        '<td class="fc-y num">' + inp('aT4', 'fc-pct') + '</td>' +
+        '<td class="fc-y num fc-yR">' + inp('oT4', 'fc-pct') + '</td>' +
         '<td>' + (d.tierNum ? 'Tier ' + d.tierNum : '—') + '</td>' +
         '<td data-c="status">' + fcStatusBadge(r.status) + '</td>' +
         '<td>' + esc(d.crMonth || '—') + '</td>' +

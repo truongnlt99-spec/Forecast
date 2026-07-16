@@ -16,6 +16,9 @@
   <div class="grid-layer"></div>
   <div class="math-layer" aria-hidden="true" id="mathLayer"></div>
 
+  <!-- Toast: hiện mọi lỗi/thông báo, kể cả lỗi JS không lường trước -->
+  <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
   <!-- =====================================================
        LOGIN SCREEN
        ===================================================== -->
@@ -68,6 +71,7 @@
       </nav>
 
       <div class="user-box">
+        <button class="btn" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet">↻ Làm mới</button>
         <span id="userEmail"></span>
         <button class="btn" id="logoutBtn">Đăng xuất</button>
       </div>

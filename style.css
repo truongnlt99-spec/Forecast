@@ -451,6 +451,22 @@ body.login-mode .app-wrapper { display: none; }
 body.app-mode .app-wrapper { display: block; }
 body.app-mode .login-screen { display: none; }
 
+/* ============================================
+   TOAST — thông báo lỗi/trạng thái, thay cho alert()
+   ============================================ */
+.toast {
+  position: fixed; top: 18px; right: 18px; z-index: 999;
+  max-width: 360px; padding: 12px 16px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(22,35,63,.16);
+  font-size: 13px; line-height: 1.4; color: var(--ink);
+  opacity: 0; transform: translateY(-8px);
+  pointer-events: none; transition: opacity .25s ease, transform .25s ease;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.err  { border-color: var(--risk);   background: var(--risk-bg);   color: var(--risk); }
+.toast.ok   { border-color: var(--strong); background: var(--strong-bg); color: var(--strong); }
+
 
 /* ============================================
    FORECAST TAB
