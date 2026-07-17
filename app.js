@@ -849,15 +849,30 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
           auto_select: true,          // tự chọn tài khoản nếu chỉ có 1 tài khoản @base.vn đang đăng nhập trên trình duyệt
           cancel_on_tap_outside: false,
         });
+        // Dựng sẵn nút Google THẬT (renderButton chính chủ) nhưng ẩn đi —
+        // dùng làm phương án dự phòng khi One Tap/FedCM thất bại (bị chặn,
+        // bị trình duyệt tắt third-party sign-in, timeout...). Nút thật này
+        // mở popup OAuth chuẩn, không phụ thuộc cơ chế "silent prompt" của
+        // One Tap đang bị Google khai tử dần dưới FedCM nên gần như luôn bấm được.
+        var realBtnEl = document.getElementById('gRealButton');
+        if (realBtnEl) {
+          try {
+            google.accounts.id.renderButton(realBtnEl, {
+              type: 'standard', theme: 'outline', size: 'large',
+              text: 'continue_with', shape: 'rectangular', width: 280,
+            });
+          } catch (e) { console.error('renderButton lỗi:', e); }
+        }
         var savedToken = localStorage.getItem('cs_tool_token');
         if (savedToken) {
           // Token Google id_token chỉ sống ~1h theo thiết kế của Google (không phải bug của tool này).
           // Khi hết hạn, thử âm thầm lấy token mới trước khi bắt user bấm nút lại.
           loadDeals(savedToken, /* silentRetryOnFail */ true);
         } else {
-          // Chưa từng đăng nhập / đã logout — thử âm thầm một lần, nếu không được thì
-          // vẫn hiện màn login bình thường (không cần làm gì thêm, đây là behavior mặc định).
-          trySilentSignIn();
+          // Chưa từng đăng nhập / đã logout — thử âm thầm một lần; nếu thất bại
+          // (bị chặn FedCM/third-party sign-in...) thì hiện luôn nút Google thật
+          // để user không cần bấm hụt nút custom rồi mới thấy phương án dự phòng.
+          trySilentSignIn(showGoogleFallback);
         }
       }
     }, 100);
@@ -868,25 +883,66 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // chồng nhiều lần — đây là nguyên nhân của lỗi "AbortError: signal is
   // aborted without reason" thấy trong console (gọi prompt() lần 2 khi
   // lần 1 chưa xong sẽ tự abort lần 1).
+  //
+  // QUAN TRỌNG: khoá này PHẢI có timeout cứng. Nếu không, khi lần gọi
+  // prompt() đầu tiên (tự động lúc load trang) bị "treo" — callback của
+  // Google không bao giờ bắn về (trình duyệt chặn FedCM/cookie bên thứ 3,
+  // tiện ích chặn quảng cáo chặn iframe accounts.google.com, quirk của
+  // thư viện GSI...) — thì promptInFlight kẹt ở true vĩnh viễn, và mọi
+  // lần bấm nút "Continue with Google" sau đó sẽ bị trySilentSignIn()
+  // return ngay lập tức trong im lặng: spinner quay mãi, không lỗi,
+  // không phản hồi. Đây chính là bug "bấm vào cứ load, không phản hồi".
   // =========================================================
   var promptInFlight = false;
+  var PROMPT_TIMEOUT_MS = 6000;
+  // Nếu có lệnh gọi tới trong lúc đang có 1 lần prompt() khác chạy dở (VD: lần tự
+  // động lúc load trang còn đang chờ, rồi user bấm nút) — KHÔNG được âm thầm bỏ qua
+  // lệnh gọi đó, vì nếu vậy callback (đóng spinner, hiện lỗi...) của lệnh gọi này
+  // sẽ không bao giờ chạy, dù cơ chế timeout ở trên có tự giải phóng khoá đi nữa
+  // (nó chỉ giải phóng khoá, không đụng tới UI của lệnh gọi bị bỏ qua). Nên xếp
+  // hàng chờ (queue) và khi lần đang chạy dở đó kết thúc (dù thành công hay hết giờ),
+  // gọi luôn onFail cho tất cả các lệnh gọi đang xếp hàng.
+  var pendingWaiters = [];
 
   function trySilentSignIn(onFail) {
-    if (promptInFlight) return;
+    if (promptInFlight) {
+      if (onFail) pendingWaiters.push(onFail);
+      return;
+    }
     if (!(window.google && google.accounts && google.accounts.id)) { if (onFail) onFail(); return; }
+
     promptInFlight = true;
+    var settled = false;
+    var finish = function () {
+      if (settled) return;
+      settled = true;
+      promptInFlight = false;
+      var waiters = pendingWaiters; pendingWaiters = [];
+      waiters.forEach(function (fn) { try { fn(); } catch (e) {} });
+    };
+    var timeoutId = setTimeout(function () {
+      if (settled) return;
+      console.warn('Google prompt() không phản hồi sau ' + (PROMPT_TIMEOUT_MS / 1000) + 's — có thể do trình duyệt chặn FedCM/cookie bên thứ 3, hoặc tiện ích chặn quảng cáo. Đã tự reset để thử lại được.');
+      finish();
+      if (onFail) onFail();
+    }, PROMPT_TIMEOUT_MS);
+
     try {
       google.accounts.id.prompt(function (notification) {
-        promptInFlight = false;
+        if (settled) return; // timeout đã xử lý rồi, bỏ qua callback bắn về trễ
+        clearTimeout(timeoutId);
         var reason = notification.getNotDisplayedReason ? notification.getNotDisplayedReason() : null;
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.log('Silent sign-in không khả dụng:', reason || notification.getSkippedReason && notification.getSkippedReason());
+        var isFail = notification.isNotDisplayed() || notification.isSkippedMoment();
+        finish();
+        if (isFail) {
+          console.log('Silent sign-in không khả dụng:', reason || (notification.getSkippedReason && notification.getSkippedReason()));
           if (onFail) onFail();
         }
       });
     } catch (err) {
-      promptInFlight = false;
+      clearTimeout(timeoutId);
       console.error('Google sign-in error:', err);
+      finish();
       if (onFail) onFail();
     }
   }
@@ -914,6 +970,15 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     if (btn) btn.removeAttribute('disabled');
   }
 
+  function showGoogleFallback() {
+    var fb = $('gbtnFallback');
+    if (fb) fb.classList.remove('hidden');
+  }
+  function hideGoogleFallback() {
+    var fb = $('gbtnFallback');
+    if (fb) fb.classList.add('hidden');
+  }
+
   window.signInWithGoogle = function () {
     var logo = document.getElementById('glogo');
     var spinner = document.getElementById('spinner');
@@ -927,12 +992,26 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
 
     setTimeout(function () {
       trySilentSignIn(function () {
-        // One Tap / FedCM không hiện được (VD: trình duyệt chặn cookie bên thứ 3) → reset nút, user thử lại
-        console.warn('One Tap not available, fallback to prompt UI');
+        // One Tap / FedCM không hiện được, hoặc prompt() bị treo quá PROMPT_TIMEOUT_MS
+        // (chặn FedCM/cookie bên thứ 3, third-party sign-in bị Chrome tắt, tiện ích
+        // chặn quảng cáo...) → reset nút custom, báo rõ cho user, và LUÔN LUÔN
+        // hiện nút Google THẬT (renderButton) làm phương án dự phòng — nút này mở
+        // popup OAuth chuẩn, không phụ thuộc cơ chế "silent prompt" của One Tap.
+        console.warn('One Tap not available, showing real Google button fallback');
         resetGoogleButton();
+        showGoogleFallback();
+        showToast('One Tap không mở được. Dùng nút Google chính thức bên dưới để đăng nhập.', 'err', 6000);
       });
     }, 300);
   };
+
+  (function () {
+    var retryBtn = $('gbtnRetry');
+    if (retryBtn) retryBtn.addEventListener('click', function () {
+      hideGoogleFallback();
+      window.signInWithGoogle();
+    });
+  })();
 
 
   // =========================================================
@@ -1776,6 +1855,26 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // CHANGELOG — mỗi lần cập nhật tool, thêm 1 entry mới lên ĐẦU mảng này.
   // =========================================================
   var CHANGELOG = [
+    {
+      date: '17/07/2026',
+      title: 'Fix: đăng nhập Google bị khoá khi Chrome tắt "Third-party sign-in" (FedCM)',
+      items: [
+        'Phát hiện qua console: "FedCM was disabled... via site settings" — Chrome tắt third-party sign-in cho domain github.io (thường do trước đó từng bấm từ chối popup Google 1-2 lần), khiến One Tap luôn thất bại ngay từ đầu, không liên quan tới việc đổi tên repo.',
+        'Thêm nút Google THẬT (renderButton chính chủ) làm phương án dự phòng — dựng sẵn, ẩn đi lúc load trang.',
+        'Khi One Tap/FedCM thất bại vì BẤT KỲ lý do gì (bị chặn, bị tắt, timeout...), tự động hiện nút Google thật kèm nút "Thử lại One Tap" — không cần đợi báo IT bật lại site setting mới đăng nhập được.',
+        'Nút thật mở popup OAuth chuẩn, không phụ thuộc cơ chế "silent prompt" của One Tap đang bị Google khai tử dần dưới FedCM — bền hơn về lâu dài cho cả team.',
+      ],
+    },
+    {
+      date: '17/07/2026',
+      title: 'Fix bug: bấm "Continue with Google" cứ load, không phản hồi',
+      items: [
+        'Nguyên nhân: khoá promptInFlight chặn gọi chồng google.accounts.id.prompt() không có timeout — nếu 1 lần gọi bị treo (trình duyệt chặn FedCM/cookie bên thứ 3, tiện ích chặn quảng cáo…) thì khoá kẹt vĩnh viễn, mọi lần bấm nút sau đó bị bỏ qua trong im lặng.',
+        'Thêm timeout cứng 6s cho mỗi lần gọi prompt(); hết giờ vẫn không có phản hồi thì tự động nhả khoá + reset nút.',
+        'Nếu có lệnh gọi đến trong lúc 1 lần khác đang chạy dở (VD: lần tự động lúc load trang), lệnh gọi đó được xếp hàng chờ thay vì bị bỏ qua — đảm bảo nút luôn được reset đúng lúc, không bị treo vĩnh viễn dù rơi vào tình huống nào.',
+        'Khi thất bại, hiện toast báo lỗi rõ ràng kèm gợi ý xử lý (tắt tiện ích chặn quảng cáo/cookie bên thứ 3, thử ẩn danh, bấm lại) thay vì chỉ im lặng reset nút.',
+      ],
+    },
     {
       date: '17/07/2026',
       title: 'Hợp nhất bộ chọn tháng · liên kết chéo tab · đổi tên header',

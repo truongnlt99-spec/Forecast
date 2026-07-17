@@ -45,6 +45,17 @@
         <span id="gtext">Continue with Google</span>
       </button>
 
+      <!-- Fallback: nút Google THẬT (renderButton chính chủ), ẩn mặc định.
+           Hiện ra khi One Tap/FedCM thất bại (bị trình duyệt chặn, bị tắt
+           third-party sign-in, timeout...) — vì nút thật này mở popup OAuth
+           chuẩn, không phụ thuộc vào cơ chế "silent prompt" đang bị Google
+           khai tử dần dưới FedCM, nên gần như luôn bấm được. -->
+      <div class="gbtn-fallback hidden" id="gbtnFallback">
+        <p class="gbtn-fallback-note">One Tap không mở được (trình duyệt/tài khoản đang chặn). Dùng nút Google chính thức bên dưới:</p>
+        <div id="gRealButton"></div>
+        <button class="gbtn-retry" id="gbtnRetry">↻ Thử lại One Tap</button>
+      </div>
+
       <div class="divider">SSO WORKSPACE</div>
       <p class="login-note">Chỉ tài khoản <b>@base.vn</b> mới được cấp quyền truy cập.</p>
 
