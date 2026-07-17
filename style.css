@@ -536,3 +536,161 @@ body.app-mode .login-screen { display: none; }
   outline: 2px solid #F0B500;
   outline-offset: -1px;
 }
+
+/* ============================================
+   BIG UPDATE — REGISTRATION / PROFILE / FC FILTER / DASHBOARD
+   ============================================ */
+
+/* ---------- Registration screen (first login) ---------- */
+.reg-screen { display: none; }
+body.reg-mode { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
+body.reg-mode .reg-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 2; }
+body.reg-mode .login-screen, body.reg-mode .app-wrapper { display: none; }
+
+.reg-card { max-width: 460px; width: 100%; }
+.reg-sub { margin-bottom: 18px; }
+.reg-form { display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.reg-field label {
+  display: block; font-size: 11px; font-weight: 600; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;
+}
+.reg-field input, .reg-field select {
+  width: 100%; border: 1px solid var(--line); border-radius: 9px;
+  padding: 10px 12px; font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--card);
+}
+.reg-field input:focus, .reg-field select:focus {
+  outline: 2px solid rgba(76,111,255,0.35); outline-offset: 1px; border-color: var(--accent);
+}
+.reg-field input[disabled] { background: var(--paper); color: var(--ink-soft); }
+.reg-hint { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; min-height: 14px; }
+.reg-submit { margin-top: 4px; justify-content: center; background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.reg-submit:hover { background: #3B5CE6; border-color: #3B5CE6; color: #fff; }
+.reg-submit .spinner circle { stroke: #fff; }
+.reg-err { font-size: 12.5px; color: var(--risk); min-height: 16px; }
+
+/* ---------- Profile strip (overview) ---------- */
+.profile-strip {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+}
+.ps-avatar {
+  width: 44px; height: 44px; border-radius: 12px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  color: #fff; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px;
+}
+.ps-info { min-width: 0; }
+.ps-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.ps-sub { font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; }
+.ps-chips { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.ps-chip {
+  font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+  font-family: 'Space Mono', monospace;
+}
+.ps-chip.lvl { background: #E8EDFB; color: var(--accent); }
+.ps-chip.sal { background: var(--strong-bg); color: var(--strong); }
+
+.kpi-row-4 { grid-template-columns: 0.7fr 1.2fr 0.8fr 1.4fr; }
+@media (max-width: 900px) { .kpi-row, .kpi-row-4 { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Forecast filter bar ---------- */
+.fc-filter {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;
+}
+.fc-filter-month { display: flex; align-items: center; gap: 8px; }
+.fc-filter-month label {
+  font-size: 11px; font-weight: 600; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.fc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.fc-chip b { font-variant-numeric: tabular-nums; margin-left: 3px; }
+.fc-chip.warn { border-color: var(--weak); color: var(--weak); }
+.fc-chip.warn.active { background: var(--weak); border-color: var(--weak); color: #fff; }
+.fc-filter-note { font-size: 12px; font-weight: 400; color: var(--accent); }
+
+/* ---------- Dashboard ---------- */
+.dash-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+}
+.dash-hero-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.dash-hero-right { display: flex; align-items: center; gap: 8px; }
+.dash-hero-right label {
+  font-size: 11px; font-weight: 600; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.dash-empty {
+  background: var(--card); border: 1px dashed var(--line); border-radius: 12px;
+  padding: 28px 20px; text-align: center; font-size: 13.5px; color: var(--ink-soft);
+}
+.dash-card { margin-bottom: 14px; }
+
+.perf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+@media (max-width: 1000px) { .perf-grid { grid-template-columns: 1fr 1fr; } }
+.pf-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #FDFEFF; }
+.pf-card.pf-empty { background: var(--paper); }
+.pf-val { font-size: 22px; font-weight: 700; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+.pf-none { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.pf-track { position: relative; height: 8px; border-radius: 999px; background: var(--none-bg); margin-bottom: 8px; }
+.pf-fill { height: 100%; border-radius: 999px; background: var(--none); }
+.pf-fill.f-under { background: var(--risk); }
+.pf-fill.f-kpi   { background: var(--accent); }
+.pf-fill.f-goal  { background: var(--purple); }
+.pf-fill.f-out   { background: var(--amber); }
+.pf-tick { position: absolute; top: -3px; width: 2px; height: 14px; border-radius: 2px; }
+.pf-tick.t-kpi  { background: var(--accent); }
+.pf-tick.t-goal { background: var(--purple); }
+.pf-tick.t-out  { background: var(--amber); }
+
+.perf-rating {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);
+  font-size: 13px;
+}
+.pr-label { font-weight: 600; color: var(--ink-soft); }
+.pr-note { color: var(--ink-soft); font-size: 12.5px; }
+.rating-badge {
+  font-family: 'Space Mono', monospace; font-weight: 700; font-size: 12px;
+  padding: 5px 12px; border-radius: 999px;
+}
+.rt-out   { background: #FBF1DF; color: var(--amber); }
+.rt-goal  { background: #EFEAFE; color: var(--purple); }
+.rt-kpi   { background: #E8EDFB; color: var(--accent); }
+.rt-under { background: var(--risk-bg); color: var(--risk); }
+.rt-none  { background: var(--none-bg); color: var(--ink-soft); }
+
+.badge.ky-t1 { background: #E8EDFB; color: var(--accent); }
+.badge.ky-t4 { background: #EFEAFE; color: var(--purple); }
+.com-table tfoot td { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.com-table tr.com-fail td { opacity: 0.62; }
+.com-table tr.com-total td { background: #F4F7FE; font-weight: 700; }
+.com-table tr.com-grand td { background: var(--strong-bg); color: var(--strong); font-weight: 700; font-size: 14px; }
+
+.rescue-list { margin-top: 14px; font-size: 12.5px; }
+.rescue-head { font-weight: 600; color: var(--weak); margin-bottom: 8px; }
+.rescue-ok { color: var(--strong); font-weight: 600; }
+.rescue-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 0; border-bottom: 1px dashed var(--line);
+}
+.rescue-item .rn { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.rescue-item .rv { color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rescue-more { color: var(--ink-soft); padding-top: 6px; }
+
+.radar-list { margin-top: 12px; }
+.radar-row {
+  display: grid; grid-template-columns: 110px 1fr 1fr; gap: 10px; align-items: center;
+  padding: 10px 8px; border-bottom: 1px dashed var(--line); font-size: 13px;
+}
+.radar-row.cur { background: #F7F9FE; border-radius: 8px; }
+.radar-m { font-family: 'Space Mono', monospace; font-weight: 700; }
+.radar-m small { color: var(--ink-soft); font-weight: 400; }
+.radar-cell { font-variant-numeric: tabular-nums; color: var(--ink); }
+.radar-hint { font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
+
+.dash-note { font-size: 12px; color: var(--ink-soft); line-height: 1.7; margin: 4px 2px 20px; }

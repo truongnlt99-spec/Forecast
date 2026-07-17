@@ -21,6 +21,55 @@
   var allDeals = [];   // normalized deals
   var openDealId = null;
   var sortDesc = true;
+  var profile = null;        // {username, email, hoTen, level, salary} từ sheet "Danh sách CS"
+  var profileKnown = false;  // backend đã trả về field profile hay chưa (tương thích backend cũ)
+  var currentEmail = '';
+
+  // =========================================================
+  // POLICY ENGINE — trích từ "[CS MEMBERS VERSION] CS POLICY Ver.01 (01/07/2026)"
+  // Mục 6.1/6.2: mốc Performance | Mục 6.3: % Commission T1/T4 | Mục 6.5: thưởng Upsale/Cross
+  // =========================================================
+  var LEVELS = {
+    'CS_A level 1': { group: 'CSA', title: 'Solution Associate', salary: [9000000, 9000000],
+      rev: { kpi: 100e6, goal: 150e6, out: 180e6 },
+      comT1: { under: null, kpi: 1.5, goal: 2,   out: 2.3 }, comT4: null },
+    'CS_A level 2': { group: 'CSA', title: 'Solution Associate', salary: [11000000, 11000000],
+      rev: { kpi: 150e6, goal: 180e6, out: 220e6 },
+      comT1: { under: null, kpi: 1.5, goal: 2,   out: 2.3 }, comT4: null },
+    'CS level 1': { group: 'CS', title: 'Solution Representative', salary: [10000000, 13000000],
+      perf: { kpi: { cr: 75, s1: 78, s4: 75 }, goal: { cr: 77, s1: 80, s4: 77 }, out: { cr: 80, s1: 83, s4: 80, rev: 150e6 } },
+      comT1: { under: 1, kpi: 1.5, goal: 2,   out: 2.3 }, comT4: { under: 0.5, kpi: 1.5, goal: 1.8, out: 2 } },
+    'CS level 2': { group: 'CS', title: 'Solution Representative', salary: [11000000, 14000000],
+      perf: { kpi: { cr: 75, s1: 78, s4: 76 }, goal: { cr: 77, s1: 80, s4: 78 }, out: { cr: 80, s1: 83, s4: 81, rev: 200e6 } },
+      comT1: { under: 1, kpi: 1.8, goal: 2.3, out: 2.6 }, comT4: { under: 0.5, kpi: 1.8, goal: 2.1, out: 2.3 } },
+    'CS level 3': { group: 'CS', title: 'Solution Representative', salary: [12000000, 15000000],
+      perf: { kpi: { cr: 78, s1: 80, s4: 78 }, goal: { cr: 80, s1: 82, s4: 80 }, out: { cr: 83, s1: 85, s4: 83, rev: 300e6 } },
+      comT1: { under: 1, kpi: 2.1, goal: 2.6, out: 2.9 }, comT4: { under: 0.5, kpi: 2.1, goal: 2.4, out: 2.6 } },
+    'CS level 4': { group: 'CS', title: 'Solution Representative', salary: [13000000, 17000000],
+      perf: { kpi: { cr: 78, s1: 80, s4: 79 }, goal: { cr: 80, s1: 82, s4: 81 }, out: { cr: 83, s1: 85, s4: 84, rev: 350e6 } },
+      comT1: { under: 1, kpi: 2.4, goal: 2.9, out: 3.2 }, comT4: { under: 0.5, kpi: 2.4, goal: 2.7, out: 2.9 } },
+    'CS level 5': { group: 'CS', title: 'Solution Specialist', salary: [15000000, 20000000],
+      perf: { kpi: { cr: 81, s1: 82, s4: 81 }, goal: { cr: 83, s1: 84, s4: 83 }, out: { cr: 86, s1: 87, s4: 86, rev: 400e6 } },
+      comT1: { under: 1, kpi: 2.7, goal: 3.2, out: 3.5 }, comT4: { under: 0.5, kpi: 2.7, goal: 3,   out: 3.2 } },
+    'CS level 6': { group: 'CS', title: 'Solution Specialist', salary: [20000000, 25000000],
+      perf: { kpi: { cr: 85, s1: 85, s4: 83 }, goal: { cr: 87, s1: 87, s4: 85 }, out: { cr: 90, s1: 90, s4: 88, rev: 500e6 } },
+      comT1: { under: 1, kpi: 3,   goal: 3.5, out: 3.8 }, comT4: { under: 0.5, kpi: 3,   goal: 3.3, out: 3.5 } },
+    // Lưu ý: bảng com 4 tháng của CS level 7 trong policy đang ghi giống hệt level 6
+    // (3% / 3.3% / 3.5%) — tool giữ ĐÚNG theo văn bản; nếu công ty đính chính thì sửa dòng dưới.
+    'CS level 7': { group: 'CS', title: 'Solution Specialist', salary: [25000000, 35000000],
+      perf: { kpi: { cr: 87, s1: 85, s4: 85 }, goal: { cr: 89, s1: 87, s4: 87 }, out: { cr: 92, s1: 90, s4: 90, rev: 600e6 } },
+      comT1: { under: 1, kpi: 3.3, goal: 3.8, out: 4.1 }, comT4: { under: 0.5, kpi: 3,   goal: 3.3, out: 3.5 } },
+  };
+  var LEVEL_ORDER = ['CS_A level 1', 'CS_A level 2', 'CS level 1', 'CS level 2', 'CS level 3', 'CS level 4', 'CS level 5', 'CS level 6', 'CS level 7'];
+  // Mục 6.5 — thưởng Upsale/Cross sale theo tổng DT phần mềm ghi nhận trong tháng
+  function upsaleBonusPct(base) {
+    if (!base || base <= 0) return 0;
+    if (base < 50e6) return 2;
+    if (base < 100e6) return 3;
+    if (base < 150e6) return 4;
+    return 5;
+  }
+  var RATING_LABEL = { out: 'OUT — Xuất sắc', goal: 'GOAL — Giỏi', kpi: 'KPI — Đạt', under: 'UNDER KPI', none: 'Không xếp loại' };
   var CHART_COLORS = ['#4C6FFF', '#7C5CFC', '#22A06B', '#E39230', '#D93B3B', '#147D6F', '#4C8C2B', '#C97A0E'];
 
   // Staleness tracking — quyết định khi nào tự âm thầm tải lại dữ liệu khi chuyển tab
@@ -81,7 +130,100 @@
     localStorage.removeItem('cs_tool_token');
     silentReauthInProgress = false;
     lastFetchOverview = 0; lastFetchForecast = 0;
+    profile = null; profileKnown = false; currentEmail = '';
     setUiMode('login');
+  }
+
+  // =========================================================
+  // REGISTRATION — lần đầu đăng nhập phải khai Họ tên / Level / Salary,
+  // lưu về sheet "Danh sách CS" để tính lương & performance các tháng sau.
+  // =========================================================
+  function profileComplete(p) {
+    return !!(p && String(p.hoTen || '').trim() && String(p.level || '').trim());
+  }
+
+  var regBuilt = false;
+  function buildRegForm() {
+    if (regBuilt) return;
+    regBuilt = true;
+    var sel = $('regLevel');
+    LEVEL_ORDER.forEach(function (lv) {
+      var o = document.createElement('option');
+      o.value = lv;
+      o.textContent = lv + ' — ' + LEVELS[lv].title;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', regOnLevelChange);
+    $('regSubmit').addEventListener('click', regSubmit);
+  }
+
+  function regOnLevelChange() {
+    var lv = $('regLevel').value;
+    var sal = $('regSalary'), hint = $('regSalaryHint'), lvHint = $('regLevelHint');
+    if (!lv) {
+      sal.value = ''; sal.disabled = true; sal.placeholder = 'Chọn level trước';
+      hint.textContent = ''; lvHint.textContent = '';
+      return;
+    }
+    var def = LEVELS[lv], lo = def.salary[0], hi = def.salary[1];
+    lvHint.textContent = def.title + (def.group === 'CSA' ? ' · vai trò CS_A' : ' · vai trò CS_PM/CS_A theo sizing');
+    if (lo === hi) {
+      sal.value = lo; sal.disabled = true;
+      hint.textContent = 'Mức cố định theo policy: ' + fmtMoney(lo);
+    } else {
+      sal.disabled = false;
+      sal.min = lo; sal.max = hi;
+      if (!sal.value || +sal.value < lo || +sal.value > hi) sal.value = lo;
+      sal.placeholder = lo + ' – ' + hi;
+      hint.textContent = 'Khung theo policy: ' + fmtMoney(lo) + ' – ' + fmtMoney(hi) + ' (nhập đúng mức của bạn)';
+    }
+    $('regErr').textContent = '';
+  }
+
+  function showRegistration(email) {
+    buildRegForm();
+    $('regEmail').textContent = email || '';
+    if (profile && profile.hoTen) $('regName').value = profile.hoTen;
+    setUiMode('reg');
+  }
+
+  function regSubmit() {
+    var hoTen = $('regName').value.trim();
+    var level = $('regLevel').value;
+    var salary = parseMoney($('regSalary').value);
+    var err = $('regErr');
+    if (!hoTen) { err.textContent = 'Vui lòng nhập Họ và tên.'; return; }
+    if (!level) { err.textContent = 'Vui lòng chọn Level.'; return; }
+    var def = LEVELS[level];
+    if (salary == null || salary < def.salary[0] || salary > def.salary[1]) {
+      err.textContent = 'Salary phải nằm trong khung ' + fmtMoney(def.salary[0]) + ' – ' + fmtMoney(def.salary[1]) + '.';
+      return;
+    }
+    err.textContent = '';
+    var btn = $('regSubmit'), sp = $('regSpinner'), tx = $('regBtnText');
+    btn.setAttribute('disabled', ''); sp.classList.remove('hidden'); tx.textContent = 'Đang lưu…';
+
+    var token = localStorage.getItem('cs_tool_token');
+    fetch(CFG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: token, action: 'register', hoTen: hoTen, level: level, salary: salary }),
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (text) { return JSON.parse(text); })
+      .then(function (d) {
+        btn.removeAttribute('disabled'); sp.classList.add('hidden'); tx.textContent = 'Lưu & vào hệ thống';
+        if (!d.ok) { err.textContent = 'Lưu không thành công: ' + (d.error || 'lỗi không rõ'); return; }
+        profile = d.profile || { email: currentEmail, hoTen: hoTen, level: level, salary: salary };
+        showToast('Đã lưu thông tin vào sheet Danh sách CS ✓', 'ok');
+        showApp(currentEmail);
+        setDefaultDateRange();
+        renderOverview();
+      })
+      .catch(function (e2) {
+        btn.removeAttribute('disabled'); sp.classList.add('hidden'); tx.textContent = 'Lưu & vào hệ thống';
+        err.textContent = 'Không kết nối được: ' + e2.message;
+      });
   }
 
   // =========================================================
@@ -115,6 +257,17 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         }
         allDeals = (data.deals || []).map(normalizeDeal);
         lastFetchOverview = Date.now();
+        currentEmail = data.email || '';
+        // Backend mới trả về profile (từ sheet "Danh sách CS"). Nếu chưa đăng ký
+        // (thiếu Họ tên / Level) → bắt buộc đăng ký trước khi vào app.
+        if (data.profile !== undefined) {
+          profileKnown = true;
+          profile = data.profile || null;
+          if (!profileComplete(profile)) {
+            showRegistration(currentEmail);
+            return;
+          }
+        }
         showApp(data.email);
         if (!isBackgroundRefresh) setDefaultDateRange();
         renderOverview();
@@ -190,6 +343,14 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     return digits ? Number(digits) : null;
   }
 
+  function parseDays(v) {
+    // "50 ngày" / "50" / 50 → 50
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return v;
+    var m = String(v).match(/\d+/);
+    return m ? +m[0] : null;
+  }
+
   function parseNum(v) {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return v;
@@ -254,7 +415,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       users: parseNum(get(K.users)),
       contract: String(get(K.contract) || 'Khác'),
       received: parseDate(get(K.received)),
-      ttgl: parseNum(get(K.ttgl)),
+      ttgl: parseDays(get(K.ttgl)),
       glPlan: parseDate(get(K.glPlan)),
       glActual: parseDate(get(K.glActual)),
       glStatus: String(get(K.glStatus) || ''),
@@ -341,9 +502,26 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // =========================================================
   // RENDER: TỔNG QUAN
   // =========================================================
+  function renderProfileStrip() {
+    var strip = $('profileStrip');
+    if (!strip) return;
+    if (!profileKnown || !profileComplete(profile)) { strip.style.display = 'none'; return; }
+    strip.style.display = 'flex';
+    var name = profile.hoTen || currentEmail;
+    var initials = name.trim().split(/\s+/).slice(-2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+    $('psAvatar').textContent = initials || 'CS';
+    $('psName').textContent = name;
+    var def = LEVELS[profile.level];
+    $('psSub').textContent = (def ? def.title + ' · ' : '') + (currentEmail || '');
+    $('psChips').innerHTML =
+      '<span class="ps-chip lvl">' + esc(profile.level || '—') + '</span>' +
+      (profile.salary ? '<span class="ps-chip sal" title="Lương cứng đã đăng ký">₫ ' + fmtMoneyShort(parseMoney(profile.salary)) + '/tháng</span>' : '');
+  }
+
   function renderOverview() {
     var deals = getFilteredDeals();
     openDealId = null;
+    renderProfileStrip();
     $('filterCount').innerHTML = '<strong>' + deals.length + '</strong> / ' + allDeals.length + ' deal';
     renderKpis(deals);
     renderHealthStrip(deals);
@@ -358,6 +536,11 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       if (d.arr) totalArr += d.arr;
       if (d.glActual) { glCount++; if (d.arr) glArr += d.arr; }
     });
+    if ($('kpiDeals')) {
+      $('kpiDeals').textContent = deals.length;
+      var nSol = Object.keys(deals.reduce(function (m, d) { m[d.solution || 'Khác'] = 1; return m; }, {})).length;
+      $('kpiDealsSub').textContent = deals.length ? nSol + ' bộ giải pháp · ' + glCount + ' đã go-live' : '';
+    }
     $('kpiRevenue').textContent = fmtMoney(totalArr);
     $('kpiRevenueSub').textContent = deals.length
       ? 'Đã Go-live: ' + fmtMoneyShort(glArr) + ' (' + glCount + '/' + deals.length + ' deal)'
@@ -521,7 +704,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     var items = [
       ['Phân khúc', deal.segment || '—'],
       ['Bộ giải pháp', deal.solution || '—'],
-      ['Tier', deal.tier != null && deal.tier !== '' ? 'Tier ' + deal.tier : '—'],
+      ['Tier', deal.tier != null && String(deal.tier) !== '' ? (/tier/i.test(String(deal.tier)) ? String(deal.tier) : 'Tier ' + deal.tier) : '—'],
       ['Số user phân quyền', deal.users != null ? deal.users.toLocaleString('vi-VN') : '—'],
       ['Loại hợp đồng', deal.contract || '—'],
       ['TTGL quy định', deal.ttgl != null ? deal.ttgl + ' ngày' : '—'],
@@ -571,6 +754,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       panels[k].style.display = k === name ? 'block' : 'none';
     });
     if (name === 'forecast') renderForecast();
+    if (name === 'dashboard') renderDashboard();
     if (name === 'overview' && Date.now() - lastFetchOverview > STALE_MS) {
       var token = localStorage.getItem('cs_tool_token');
       if (token) loadDeals(token, true, true); // background refresh, giữ nguyên bộ lọc đang chọn, thử silent reauth nếu token hết hạn
@@ -587,6 +771,8 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
           !confirm('Bạn đang có ô sửa chưa lưu ở Forecast. Làm mới sẽ mất các thay đổi này. Tiếp tục?')) return;
       fcState = {};
       fcLoad();
+    } else if (name === 'dashboard') {
+      fcLoad(false, renderDashboard);
     } else {
       loadDeals(token, true, true);
     }
@@ -757,7 +943,33 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       aT4:      findKey(keys, ['% active t4', 'active t4']),
       oT4:      findKey(keys, ['% output t4', 'output t4']),
       dtPhai:   findKey(keys, ['dt phải go-live', 'dt phải golive', 'phải go-live']),
+      dtDat:    findKey(keys, ['dt go-live đạt', 'dt golive đạt', 'go-live đạt']),
+      monthT1:  findKey(keys, ['tháng đo t1']),
+      monthT4:  findKey(keys, ['tháng đo t4']),
     };
+  }
+
+  // ---- Month key helpers ("MM/YYYY") ----
+  function mNorm(v) {
+    if (v == null) return '';
+    if (v instanceof Date && !isNaN(v)) return String(v.getMonth() + 1).padStart(2, '0') + '/' + v.getFullYear();
+    var s = String(v).trim();
+    var m = s.match(/(\d{1,2})\s*\/\s*(\d{4})/);           // "03/2026", "3/2026"
+    if (m) return String(+m[1]).padStart(2, '0') + '/' + m[2];
+    var d = parseDate(s);                                   // fallback: cả chuỗi ngày/ISO
+    return d ? mNorm(d) : '';
+  }
+  function mKeyNow() { return mNorm(new Date()); }
+  function mCmp(a, b) {
+    // so sánh 2 key MM/YYYY; key rỗng đẩy về sau
+    if (!a && !b) return 0; if (!a) return 1; if (!b) return -1;
+    var p = a.split('/'), q = b.split('/');
+    return (p[1] - q[1]) || (p[0] - q[0]);
+  }
+  function mAdd(key, n) {
+    var p = key.split('/');
+    var d = new Date(+p[1], +p[0] - 1 + n, 1);
+    return mNorm(d);
   }
 
   function fcNormalize(raw) {
@@ -772,11 +984,14 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       segment: String(g(K.segment) || ''),
       tierNum: tm ? +tm[0] : null,
       received: parseDate(g(K.received)),
-      ttgl: parseNum(g(K.ttgl)),
+      ttgl: parseDays(g(K.ttgl)),
       glPlan: parseDate(g(K.glPlan)),
-      crMonth: String(g(K.crMonth) || ''),
+      crMonth: mNorm(g(K.crMonth)),
+      monthT1: mNorm(g(K.monthT1)),
+      monthT4: mNorm(g(K.monthT4)),
       acr: parseMoney(g(K.acr)),
       dtPhai: parseMoney(g(K.dtPhai)),
+      dtDat0: parseMoney(g(K.dtDat)),
       glActual0: parseDate(g(K.glActual)),
       aT1_0: parsePct(g(K.aT1)), oT1_0: parsePct(g(K.oT1)),
       aT4_0: parsePct(g(K.aT4)), oT4_0: parsePct(g(K.oT4)),
@@ -801,9 +1016,24 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     return Math.round((0.7 * u + 0.3 * o) * 10) / 10;
   }
 
-  function fcCompute(d) {
+  // Giá trị "hiệu lực" của 1 deal = ô đang sửa (chưa lưu) ?? giá trị đã lưu trên sheet.
+  // Trước đây fcCompute chỉ nhìn ô đang sửa → deal đã có số trên sheet vẫn hiện "—";
+  // bản này sửa lại để CHS/KPI phản ánh đúng dữ liệu đã lưu.
+  function fcEff(d) {
     var e = fcState[d.id] || {};
-    var gl = e.goLive ? parseDate(e.goLive) : null;
+    var glStr = (e.goLive !== undefined) ? e.goLive : (d.glActual0 ? fmtDate(d.glActual0) : '');
+    return {
+      gl: glStr ? parseDate(String(glStr)) : null,
+      aT1: (e.aT1 !== undefined) ? e.aT1 : d.aT1_0,
+      oT1: (e.oT1 !== undefined) ? e.oT1 : d.oT1_0,
+      aT4: (e.aT4 !== undefined) ? e.aT4 : d.aT4_0,
+      oT4: (e.oT4 !== undefined) ? e.oT4 : d.oT4_0,
+    };
+  }
+
+  function fcCompute(d) {
+    var v = fcEff(d);
+    var gl = v.gl;
     var t = d.tierNum;
     var status;
     if (gl) {
@@ -816,15 +1046,110 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     } else {
       status = 'Đang triển khai';
     }
-    var cT1 = fcChs(t, e.aT1, e.oT1), cT4 = fcChs(t, e.aT4, e.oT4);
+    var cT1 = fcChs(t, v.aT1, v.oT1), cT4 = fcChs(t, v.aT4, v.oT4);
     var late = (status === 'Quá 200% → dồn CR1' || status === 'Trễ - chưa go-live' || status === 'Go-live trễ');
     return {
-      gl: e.goLive || '', aT1: e.aT1, oT1: e.oT1, aT4: e.aT4, oT4: e.oT4,
+      gl: gl, aT1: v.aT1, oT1: v.oT1, aT4: v.aT4, oT4: v.oT4,
       status: status, cT1: cT1, cT4: cT4,
       acrT1: (cT1 != null && cT1 >= 50) ? (d.acr || 0) : 0,
       acrT4: (cT4 != null && cT4 >= 50) ? (d.acr || 0) : 0,
       dtDat: gl ? (d.dtPhai || 0) : 0, late: late,
     };
+  }
+
+  // =========================================================
+  // FORECAST — BỘ LỌC NHẬP LIỆU THEO THÁNG (yêu cầu Big Update III)
+  // =========================================================
+  var fcFilterKey = 'needNow';      // chip đang chọn
+  var fcFilterMonthKey = mKeyNow(); // tháng làm việc
+
+  // Phân loại 1 deal theo các "việc cần làm" trong tháng làm việc
+  function fcTags(d) {
+    var cur = fcFilterMonthKey;
+    var tags = {};
+    var v = fcEff(d);
+    var t = d.tierNum;
+    var missT = function (a, o) { return (t === 4) ? (o == null) : (a == null || o == null); };
+
+    // 1) Kỳ đo T1/T4 rơi vào tháng làm việc → cần nhập 4 chỉ số %
+    if (d.monthT1 === cur || d.monthT4 === cur) tags.needNow = true;
+
+    // 2) Kỳ đo ĐÃ QUA nhưng còn thiếu số → nhập bù gấp (CHS trống = mất SRR & commission)
+    if ((d.monthT1 && mCmp(d.monthT1, cur) < 0 && missT(v.aT1, v.oT1)) ||
+        (d.monthT4 && mCmp(d.monthT4, cur) < 0 && missT(v.aT4, v.oT4))) tags.missPast = true;
+
+    // 3) Chưa có ngày go-live thực tế → theo dõi tiến độ
+    if (!v.gl) {
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var planKey = d.glPlan ? mNorm(d.glPlan) : '';
+      if (d.glPlan && d.glPlan < today) tags.overdue = true;                     // đã trễ hạn
+      else if (planKey && planKey === cur) tags.dueSoon = true;                  // sắp trễ hạn (dự kiến tháng này)
+      else tags.notYet = true;                                                   // chưa tới hạn
+      // 4) Quá 200% định mức TTGL → dồn CR1 (chính sách mục 5)
+      if (d.received && d.ttgl != null &&
+          today.getTime() > d.received.getTime() + 2 * d.ttgl * 86400000) tags.over200 = true;
+    }
+    return tags;
+  }
+
+  var FC_CHIPS = [
+    { key: 'all',      label: 'Tất cả' },
+    { key: 'needNow',  label: 'Kỳ đo T1/T4 tháng này' },
+    { key: 'missPast', label: 'Thiếu số kỳ đã qua' },
+    { key: 'notYet',   label: 'Chưa GL · chưa tới hạn' },
+    { key: 'dueSoon',  label: 'Chưa GL · sắp trễ hạn' },
+    { key: 'overdue',  label: 'Chưa GL · đã trễ hạn' },
+    { key: 'over200',  label: 'Quá 200% TTGL' },
+  ];
+
+  function fcFilteredDeals() {
+    if (!fcDeals) return [];
+    if (fcFilterKey === 'all') return fcDeals;
+    return fcDeals.filter(function (d) { return !!fcTags(d)[fcFilterKey]; });
+  }
+
+  function fcInitFilterMonth() {
+    var sel = $('fcFilterMonth');
+    if (!sel || sel.options.length) return;
+    // dải tháng: từ -6 → +6 quanh tháng hiện tại, mặc định tháng hiện tại
+    for (var i = -6; i <= 6; i++) {
+      var k = mAdd(mKeyNow(), i);
+      var o = document.createElement('option');
+      o.value = k; o.textContent = k + (i === 0 ? ' · hiện tại' : '');
+      sel.appendChild(o);
+    }
+    sel.value = mKeyNow();
+    sel.addEventListener('change', function () {
+      fcFilterMonthKey = sel.value;
+      fcRenderChips(); fcRenderTable();
+    });
+  }
+
+  function fcRenderChips() {
+    var box = $('fcChips');
+    if (!box || !fcDeals) return;
+    var counts = { all: fcDeals.length, needNow: 0, missPast: 0, notYet: 0, dueSoon: 0, overdue: 0, over200: 0 };
+    fcDeals.forEach(function (d) {
+      var t = fcTags(d);
+      Object.keys(t).forEach(function (k) { counts[k]++; });
+    });
+    box.innerHTML = FC_CHIPS.map(function (c) {
+      var n = counts[c.key] || 0;
+      var warn = (c.key === 'missPast' || c.key === 'overdue' || c.key === 'over200') && n > 0;
+      return '<button class="chip-btn fc-chip' + (fcFilterKey === c.key ? ' active' : '') + (warn ? ' warn' : '') +
+        '" data-fck="' + c.key + '">' + esc(c.label) + ' <b>' + n + '</b></button>';
+    }).join('');
+    box.querySelectorAll('.fc-chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        fcFilterKey = b.getAttribute('data-fck');
+        fcRenderChips(); fcRenderTable();
+      });
+    });
+    var note = $('fcFilterNote');
+    if (note) {
+      var cur = FC_CHIPS.find(function (c) { return c.key === fcFilterKey; });
+      note.textContent = fcFilterKey === 'all' ? '' : '· lọc: ' + cur.label + ' — tháng ' + fcFilterMonthKey;
+    }
   }
 
   function fcStatusBadge(s) {
@@ -851,7 +1176,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   function renderForecast() {
     if (!fcLoaded) { fcLoad(); return; }
     try {
-      fcRenderKpis(); fcRenderTable();
+      fcInitFilterMonth(); fcRenderChips(); fcRenderKpis(); fcRenderTable();
     } catch (err) {
       console.error('renderForecast error:', err);
       showToast('Lỗi hiển thị Forecast: ' + err.message, 'err');
@@ -863,7 +1188,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     }
   }
 
-  function fcLoad(isBackgroundRefresh) {
+  function fcLoad(isBackgroundRefresh, onDone) {
     var token = localStorage.getItem('cs_tool_token');
     var empty = $('fcEmpty');
     if (empty && !isBackgroundRefresh) { empty.style.display = 'block'; empty.textContent = 'Đang tải dữ liệu từ sheet Database…'; }
@@ -883,7 +1208,10 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         fcSeed(); fcLoaded = true; lastFetchForecast = Date.now();
         if (empty) empty.style.display = fcDeals.length ? 'none' : 'block';
         if (empty && !fcDeals.length) empty.textContent = 'Sheet Database chưa có deal nào.';
+        fcInitFilterMonth();
+        fcRenderChips();
         fcRenderKpis(); fcRenderTable();
+        if (typeof onDone === 'function') onDone();
       })
       .catch(function (err) {
         console.error('fcLoad error:', err);
@@ -929,7 +1257,15 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   function fcRenderTable() {
     if (!fcDeals) return;
     var tb = $('fcTbody');
-    tb.innerHTML = fcDeals.map(function (d) {
+    var list = fcFilteredDeals();
+    var empty = $('fcEmpty');
+    if (empty) {
+      empty.style.display = list.length ? 'none' : 'block';
+      if (!list.length) empty.textContent = fcDeals.length
+        ? 'Không có deal nào thuộc nhóm này trong tháng ' + fcFilterMonthKey + ' — thử chip khác hoặc "Tất cả".'
+        : 'Sheet Database chưa có deal nào.';
+    }
+    tb.innerHTML = list.map(function (d) {
       var r = fcCompute(d);
       var inp = function (f, cls) {
         var type = (f === 'goLive') ? 'date' : 'number';
@@ -941,7 +1277,8 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
                  : (f === 'aT4') ? d.aT4_0
                  : (f === 'oT4') ? d.oT4_0 : null;
         // Nếu user đã sửa ô này (còn trong fcState, chưa lưu) thì ưu tiên giá trị đã sửa
-        var current = (fcState[d.id] && fcState[d.id][f] !== undefined) ? fcState[d.id][f] : orig;
+        var edited = !!(fcState[d.id] && fcState[d.id][f] !== undefined);
+        var current = edited ? fcState[d.id][f] : orig;
         var displayVal;
         if (type === 'date') {
           displayVal = '';
@@ -954,7 +1291,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         } else {
           displayVal = (current == null ? '' : current);
         }
-        return '<input class="fc-in ' + cls + '" type="' + type + '" data-id="' + esc(d.id) + '" data-f="' + f + '" value="' + esc(displayVal) + '"'
+        return '<input class="fc-in ' + cls + (edited ? ' fc-edited' : '') + '" type="' + type + '" data-id="' + esc(d.id) + '" data-f="' + f + '" value="' + esc(displayVal) + '"'
              + (placeholder ? ' placeholder="' + placeholder + '"' : '') + (type === 'number' && cls.indexOf('pct') > -1 ? ' min="0" max="100"' : '') + '>';
       };
       return '<tr id="fc-row-' + esc(d.id) + '">' +
@@ -1000,6 +1337,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     if (el) el.classList.add('fc-edited');
     fcUpdateRow(id);
     fcRenderKpis();
+    fcRenderChips();
     fcFlag('• chưa lưu về sheet');
   }
 
@@ -1018,7 +1356,11 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     fcDeals.forEach(function (d) {
       if (fcState[d.id]) {
         var e = fcState[d.id];
-        var gl = e.goLive || '';
+        // QUAN TRỌNG: nếu user không đụng vào ô Go-live thì giữ nguyên giá trị đã lưu
+        // trên sheet (trước đây gửi chuỗi rỗng → backend xóa mất ngày go-live).
+        var gl = (e.goLive !== undefined)
+          ? (e.goLive || '')
+          : (d.glActual0 ? fmtDate(d.glActual0) : '');
         // convert HTML5 date (yyyy-mm-dd) back to dd/mm/yyyy
         if (gl.match(/^\d{4}-\d{2}-\d{2}$/)) {
           var p = gl.split('-');
@@ -1051,6 +1393,331 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         }
       })
       .catch(function (err) { fcFlag('⚠ lưu lỗi: ' + err.message); });
+  }
+
+  // =========================================================
+  // DASHBOARD TAB — dữ liệu đã tính ở sheet Database + quy định policy
+  // (mục 6.2 Performance, 6.3 Commission năm đầu, 6.5 thưởng Upsale/Cross)
+  // =========================================================
+  var dbMonthKey = mKeyNow();
+  var dbMonthInit = false;
+
+  function dashInitMonth() {
+    var sel = $('dbMonth');
+    if (dbMonthInit || !sel) return;
+    var set = {};
+    (fcDeals || []).forEach(function (d) {
+      [d.crMonth, d.monthT1, d.monthT4].forEach(function (k) { if (k) set[k] = 1; });
+    });
+    set[mKeyNow()] = 1;
+    Object.keys(set).sort(mCmp).forEach(function (k) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = k + (k === mKeyNow() ? ' · hiện tại' : '');
+      sel.appendChild(o);
+    });
+    sel.value = mKeyNow();
+    sel.addEventListener('change', function () { dbMonthKey = sel.value; renderDashboard(); });
+    dbMonthInit = true;
+  }
+
+  // ---- Chỉ số tháng: CR / SRR_1 / SRR_4 / Doanh thu go-live ----
+  function dashPerf(m) {
+    var crDeals = [], t1Deals = [], t4Deals = [];
+    fcDeals.forEach(function (d) {
+      if (d.crMonth === m) crDeals.push(d);
+      if (d.monthT1 === m) t1Deals.push(d);
+      if (d.monthT4 === m) t4Deals.push(d);
+    });
+    var sumPhai = 0, sumDat = 0;
+    crDeals.forEach(function (d) {
+      var r = fcCompute(d);
+      sumPhai += d.dtPhai || 0;
+      sumDat += r.dtDat;
+    });
+    var cr = (crDeals.length && sumPhai > 0) ? Math.round(sumDat / sumPhai * 1000) / 10 : null;
+
+    // SRR theo policy: Σ DT phần mềm có CHS_CS ≥ 50 ÷ Σ DT phần mềm cần tính tại tháng đo
+    function srr(list, ky) {
+      if (!list.length) return { v: null, nOk: 0, n: 0, sumOk: 0, sumAll: 0 };
+      var sumAll = 0, sumOk = 0, nOk = 0;
+      list.forEach(function (d) {
+        var r = fcCompute(d);
+        var c = (ky === 'T1') ? r.cT1 : r.cT4;
+        var v = d.val || 0;
+        sumAll += v;
+        if (c != null && c >= 50) { sumOk += v; nOk++; }
+      });
+      return { v: sumAll > 0 ? Math.round(sumOk / sumAll * 1000) / 10 : null, nOk: nOk, n: list.length, sumOk: sumOk, sumAll: sumAll };
+    }
+    var s1 = srr(t1Deals, 'T1'), s4 = srr(t4Deals, 'T4');
+
+    // Doanh thu go-live trong tháng — chỉ tính hợp đồng New / Upsale / Cross sale (mục 6.2)
+    var rev = 0;
+    crDeals.forEach(function (d) {
+      if (/new|upsale|cross/i.test(d.contract)) rev += fcCompute(d).dtDat;
+    });
+    return { m: m, crDeals: crDeals, t1Deals: t1Deals, t4Deals: t4Deals, cr: cr, sumPhai: sumPhai, sumDat: sumDat, s1: s1, s4: s4, rev: rev };
+  }
+
+  // ---- Xếp loại Performance: xét đồng thời + loại trừ chỉ số trống (mục 6.2) ----
+  function dashRating(def, p) {
+    if (def.group === 'CSA') {
+      if (!p.crDeals.length) return 'none';
+      if (p.rev >= def.rev.out) return 'out';
+      if (p.rev >= def.rev.goal) return 'goal';
+      if (p.rev >= def.rev.kpi) return 'kpi';
+      return 'under';
+    }
+    var vals = { cr: p.cr, s1: p.s1.v, s4: p.s4.v };
+    var present = Object.keys(vals).filter(function (k) { return vals[k] != null; });
+    if (!present.length) return 'none'; // cả 3 chỉ số trống → không xếp loại (không bị Under)
+    function meets(tier) {
+      var th = def.perf[tier];
+      var ok = present.every(function (k) { return vals[k] >= th[k]; });
+      if (tier === 'out') ok = ok && p.rev >= th.rev; // mốc OUT yêu cầu thêm doanh thu go-live
+      return ok;
+    }
+    if (meets('out')) return 'out';
+    if (meets('goal')) return 'goal';
+    if (meets('kpi')) return 'kpi';
+    return 'under';
+  }
+
+  function ratingBadge(r) {
+    return '<span class="rating-badge rt-' + r + '">' + RATING_LABEL[r] + '</span>';
+  }
+
+  function perfBar(val, th) {
+    var v = (val == null) ? 0 : Math.max(0, Math.min(100, val));
+    var ticks = '';
+    if (th) {
+      [['kpi', th.kpi], ['goal', th.goal], ['out', th.out]].forEach(function (t) {
+        ticks += '<span class="pf-tick t-' + t[0] + '" style="left:' + t[1] + '%" title="' + t[0].toUpperCase() + ': ' + t[1] + '%"></span>';
+      });
+    }
+    var cls = 'pf-fill';
+    if (val != null && th) cls += (val >= th.out ? ' f-out' : val >= th.goal ? ' f-goal' : val >= th.kpi ? ' f-kpi' : ' f-under');
+    return '<div class="pf-track"><div class="' + cls + '" style="width:' + v + '%"></div>' + ticks + '</div>';
+  }
+
+  function dashRenderPerf(def, p, rating) {
+    var grid = $('perfGrid');
+    var cards = [];
+    var pctTxt = function (v) { return v == null ? '—' : String(v).replace('.', ',') + '%'; };
+
+    if (def.group === 'CSA') {
+      var pctOfOut = p.rev && def.rev.out ? Math.min(100, Math.round(p.rev / def.rev.out * 100)) : 0;
+      cards.push(
+        '<div class="pf-card"><div class="kpi-label">Doanh thu go-live tháng ' + esc(p.m) + '</div>' +
+        '<div class="pf-val">' + fmtMoneyShort(p.rev) + '</div>' +
+        '<div class="pf-track"><div class="pf-fill f-kpi" style="width:' + pctOfOut + '%"></div></div>' +
+        '<div class="kpi-sub">KPI ' + fmtMoneyShort(def.rev.kpi) + ' · GOAL ' + fmtMoneyShort(def.rev.goal) + ' · OUT ' + fmtMoneyShort(def.rev.out) + '</div></div>'
+      );
+    } else {
+      var th = def.perf;
+      var mk = function (label, val, key, sub) {
+        var excluded = (val == null);
+        return '<div class="pf-card' + (excluded ? ' pf-empty' : '') + '">' +
+          '<div class="kpi-label">' + label + '</div>' +
+          '<div class="pf-val">' + (excluded ? '<span class="pf-none">trống · loại trừ</span>' : pctTxt(val)) + '</div>' +
+          perfBar(val, { kpi: th.kpi[key], goal: th.goal[key], out: th.out[key] }) +
+          '<div class="kpi-sub">KPI ≥ ' + th.kpi[key] + '% · GOAL ≥ ' + th.goal[key] + '% · OUT ≥ ' + th.out[key] + '%' + (sub ? ' — ' + sub : '') + '</div></div>';
+      };
+      cards.push(mk('CR — tỷ lệ DT go-live', p.cr, 'cr', p.crDeals.length ? fmtMoneyShort(p.sumDat) + ' / ' + fmtMoneyShort(p.sumPhai) + ' · ' + p.crDeals.length + ' deal' : 'không có deal đến hạn CR'));
+      cards.push(mk('SRR_1 — thành công sau 1 tháng', p.s1.v, 's1', p.t1Deals.length ? p.s1.nOk + '/' + p.s1.n + ' deal đạt CHS ≥ 50' : 'không có kỳ đo T1'));
+      cards.push(mk('SRR_4 — thành công sau 4 tháng', p.s4.v, 's4', p.t4Deals.length ? p.s4.nOk + '/' + p.s4.n + ' deal đạt CHS ≥ 50' : 'không có kỳ đo T4'));
+      cards.push(
+        '<div class="pf-card"><div class="kpi-label">DT go-live (New/Up/Cross)</div>' +
+        '<div class="pf-val">' + fmtMoneyShort(p.rev) + '</div>' +
+        '<div class="kpi-sub">Điều kiện thêm của mốc OUT: ≥ ' + fmtMoneyShort(th.out.rev) + '</div></div>'
+      );
+    }
+    grid.innerHTML = cards.join('');
+
+    var note;
+    if (rating === 'none') note = 'Cả 3 chỉ số đều không phát sinh dữ liệu trong tháng → <b>không xếp loại</b>, không bị ghi nhận Under KPI.';
+    else if (rating === 'under') note = def.group === 'CSA'
+      ? 'Dưới mốc KPI — CS_A không có commission hỗ trợ Under KPI theo bảng 6.3.'
+      : 'Dưới mốc KPI — áp dụng commission hỗ trợ: T1 = 1% · T4 = 0.5% trên ACR go-live thành công (CHS_CS ≥ 50).';
+    else note = 'Xét đồng thời các chỉ số có phát sinh dữ liệu; chỉ số trống được tự động loại trừ.';
+    $('perfRating').innerHTML = '<span class="pr-label">Xếp loại tháng ' + esc(p.m) + ':</span> ' + ratingBadge(rating) + '<span class="pr-note">' + note + '</span>';
+  }
+
+  // ---- Bảng commission tháng (mục 6.3 + 6.5) ----
+  function dashRenderCommission(def, p, rating) {
+    var tb = $('comTbody'), tf = $('comTfoot'), emptyEl = $('comEmpty');
+    var rT1 = (rating !== 'none' && def.comT1) ? def.comT1[rating] : null;
+    var rT4 = (rating !== 'none' && def.comT4) ? def.comT4[rating] : null;
+
+    var hint = [];
+    hint.push('Performance: ' + RATING_LABEL[rating]);
+    hint.push('%Com T1: ' + (rT1 != null ? rT1 + '%' : '—'));
+    hint.push('%Com T4: ' + (def.comT4 ? (rT4 != null ? rT4 + '%' : '—') : 'CS_A không áp dụng'));
+    $('comRateHint').textContent = hint.join(' · ');
+
+    var rows = [], totT1 = 0, totT4 = 0;
+    var pushRows = function (list, ky, rate) {
+      list.forEach(function (d) {
+        var r = fcCompute(d);
+        var chs = (ky === 'T1') ? r.cT1 : r.cT4;
+        var pass = chs != null && chs >= 50;
+        var com = (pass && rate != null) ? Math.round((d.acr || 0) * rate / 100) : 0;
+        if (ky === 'T1') totT1 += com; else totT4 += com;
+        rows.push('<tr class="' + (pass ? '' : 'com-fail') + '">' +
+          '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
+          '<td><span class="badge ' + (ky === 'T1' ? 'ky-t1' : 'ky-t4') + '">' + ky + ' · ' + esc(p.m) + '</span></td>' +
+          '<td class="num">' + fmtMoney(d.acr) + '</td>' +
+          '<td class="num">' + fcChsBadge(chs) + '</td>' +
+          '<td>' + (chs == null ? '<span class="badge chs-none">chưa có số</span>' : pass ? '<span class="badge gl-done">Đạt ✓</span>' : '<span class="badge gl-overdue">Không đạt</span>') + '</td>' +
+          '<td class="num">' + (pass && rate != null ? rate + '%' : '—') + '</td>' +
+          '<td class="num"><b>' + (com ? fmtMoney(com) : '—') + '</b></td>' +
+          '</tr>');
+      });
+    };
+    pushRows(p.t1Deals, 'T1', rT1);
+    if (def.comT4) pushRows(p.t4Deals, 'T4', rT4);
+
+    // Thưởng Upsale / Cross sale — tháng nhận PL (≈ tháng nhận deal, mục 6.5)
+    var usDeals = fcDeals.filter(function (d) {
+      return d.received && mNorm(d.received) === p.m && /upsale|cross/i.test(d.contract);
+    });
+    var usBase = usDeals.reduce(function (s, d) { return s + (d.val || 0); }, 0);
+    var usPct = upsaleBonusPct(usBase);
+    var usBonus = Math.round(usBase * usPct / 100);
+
+    tb.innerHTML = rows.join('');
+    emptyEl.style.display = rows.length ? 'none' : 'block';
+    if (!rows.length) emptyEl.textContent = 'Không có deal nào tới kỳ đo T1/T4 trong tháng ' + p.m + '.';
+
+    var salary = profile ? parseMoney(profile.salary) : null;
+    var totalCom = totT1 + totT4 + usBonus;
+    var frow = function (label, val, cls) {
+      return '<tr class="' + (cls || '') + '"><td colspan="6">' + label + '</td><td class="num"><b>' + val + '</b></td></tr>';
+    };
+    tf.innerHTML =
+      frow('Σ Com hiệu quả triển khai 1 tháng (' + p.t1Deals.length + ' deal đo T1)', fmtMoney(totT1)) +
+      (def.comT4
+        ? frow('Σ Com hiệu quả triển khai 4 tháng (' + p.t4Deals.length + ' deal đo T4)', fmtMoney(totT4))
+        : frow('Com 4 tháng — CS_A không áp dụng theo policy 6.3', '—')) +
+      frow('Thưởng Upsale/Cross sale — DT ghi nhận ' + fmtMoneyShort(usBase) + ' (' + usDeals.length + ' PL) × ' + usPct + '%', fmtMoney(usBonus)) +
+      frow('TỔNG COMMISSION THÁNG ' + p.m, fmtMoney(totalCom), 'com-total') +
+      (salary != null
+        ? frow('Lương cứng (' + esc(profile.level) + ')', fmtMoney(salary)) +
+          frow('THU NHẬP ƯỚC TÍNH', fmtMoney(totalCom + salary), 'com-grand')
+        : '');
+  }
+
+  // ---- Sức khỏe portfolio + deal cần cứu trước kỳ T4 ----
+  function dashRenderHealth() {
+    var counts = { strong: 0, healthy: 0, weak: 0, risk: 0, none: 0 };
+    var rescue = [];
+    fcDeals.forEach(function (d) {
+      var r = fcCompute(d);
+      var chs = (r.cT4 != null) ? r.cT4 : r.cT1;
+      counts[healthBand(chs, null)]++;
+      // đã đo T1 dưới 50 mà kỳ T4 chưa qua → còn cửa cứu trước khi chốt SRR_4/com T4
+      if (r.cT1 != null && r.cT1 < 50 && d.monthT4 && mCmp(d.monthT4, dbMonthKey) >= 0) {
+        rescue.push({ d: d, chs: r.cT1 });
+      }
+    });
+    var total = fcDeals.length || 1;
+    var order = ['strong', 'healthy', 'weak', 'risk', 'none'];
+    $('dbHealthStrip').innerHTML = order.map(function (b) {
+      var pct = counts[b] / total * 100;
+      return pct ? '<div class="seg seg-' + b + '" style="flex-basis:' + pct + '%" title="' + BAND_LABEL[b] + ': ' + counts[b] + '"></div>' : '';
+    }).join('');
+    var cls = { strong: 'hp-strong', healthy: 'hp-healthy', weak: 'hp-weak', risk: 'hp-risk', none: 'hp-none' };
+    $('dbHealthCounts').innerHTML = order.map(function (b) {
+      return '<span class="health-pill ' + cls[b] + '"><span class="n">' + counts[b] + '</span> ' + BAND_LABEL[b] + '</span>';
+    }).join('');
+    rescue.sort(function (a, b) { return a.chs - b.chs; });
+    $('dbRescue').innerHTML = !rescue.length
+      ? '<div class="rescue-ok">Không có deal nào CHS_T1 &lt; 50 còn chờ kỳ T4 — ổn ✓</div>'
+      : '<div class="rescue-head">⚠ Cần cứu trước kỳ đo T4 (CHS_T1 &lt; 50):</div>' +
+        rescue.slice(0, 6).map(function (x) {
+          return '<div class="rescue-item"><span class="rn">' + esc(x.d.name) + '</span>' +
+            '<span class="rv">' + fcChsBadge(x.chs) + ' · T4: ' + esc(x.d.monthT4) + ' · ACR ' + fmtMoneyShort(x.d.acr) + '</span></div>';
+        }).join('') + (rescue.length > 6 ? '<div class="rescue-more">… và ' + (rescue.length - 6) + ' deal khác</div>' : '');
+  }
+
+  // ---- Radar kỳ đo 3 tháng tới: ACR đang "treo" theo mốc T1/T4 ----
+  function dashRenderRadar() {
+    var rowsHtml = [];
+    for (var i = 0; i < 3; i++) {
+      var k = mAdd(dbMonthKey, i);
+      var t1 = fcDeals.filter(function (d) { return d.monthT1 === k; });
+      var t4 = fcDeals.filter(function (d) { return d.monthT4 === k; });
+      var sum = function (l) { return l.reduce(function (s, d) { return s + (d.acr || 0); }, 0); };
+      rowsHtml.push('<div class="radar-row' + (i === 0 ? ' cur' : '') + '">' +
+        '<div class="radar-m">' + k + (i === 0 ? ' <small>· tháng chọn</small>' : '') + '</div>' +
+        '<div class="radar-cell"><span class="badge ky-t1">T1</span> ' + t1.length + ' deal · ' + fmtMoneyShort(sum(t1)) + '</div>' +
+        '<div class="radar-cell"><span class="badge ky-t4">T4</span> ' + t4.length + ' deal · ' + fmtMoneyShort(sum(t4)) + '</div>' +
+        '</div>');
+    }
+    $('dbRadar').innerHTML = rowsHtml.join('') +
+      '<div class="radar-hint">Nhập đủ %Active · %Output đúng kỳ đo để ACR không rơi khỏi nền commission.</div>';
+  }
+
+  function dashRenderNote(def) {
+    var notes = [
+      'Com = %com theo Performance × ACR các deal Go-live thành công (CHS_CS_T ≥ 50) — mục 6.3.',
+      'SRR tính theo tổng giá trị HĐ phần mềm; nền com tính theo ACR — hai đơn vị khác nhau theo policy.',
+      'Thưởng Upsale/Cross tính theo tháng nhận Phụ lục (tool lấy theo Ngày nhận deal) — mục 6.5.',
+    ];
+    if (profile && profile.level === 'CS level 7') {
+      notes.push('Lưu ý: bảng com 4 tháng của CS level 7 trong policy đang trùng level 6 (3% · 3.3% · 3.5%) — tool giữ đúng văn bản.');
+    }
+    if (def.group === 'CS') {
+      notes.push('Nếu bạn làm solo không có CS_A, policy cộng thêm 100% quyền lợi CS_A (chính sách kiêm nhiệm) — tool CHƯA cộng phần này, đối soát tay khi có deal solo.');
+    }
+    $('dashNote').innerHTML = notes.map(function (n) { return '• ' + n; }).join('<br>');
+  }
+
+  function renderDashboard() {
+    var body = $('dashBody'), emptyEl = $('dashEmpty');
+    if (!body) return;
+
+    var name = (profile && profile.hoTen) || currentEmail || '—';
+    $('dbName').textContent = name;
+    var lvDef = (profile && profile.level) ? LEVELS[profile.level] : null;
+    $('dbSub').textContent = (profile && profile.level)
+      ? profile.level + (lvDef ? ' · ' + lvDef.title : '') + (profile.salary ? ' · lương cứng ' + fmtMoney(parseMoney(profile.salary)) : '')
+      : 'Chưa đăng ký level';
+    var initials = String(name).trim().split(/\s+/).slice(-2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+    $('dbAvatar').textContent = initials || 'CS';
+
+    if (!fcLoaded) {
+      emptyEl.style.display = 'block'; body.style.display = 'none';
+      emptyEl.textContent = 'Đang tải dữ liệu từ sheet Database…';
+      fcLoad(false, renderDashboard);
+      return;
+    }
+    if (profileKnown && !profileComplete(profile)) {
+      emptyEl.style.display = 'block'; body.style.display = 'none';
+      emptyEl.textContent = 'Bạn chưa đăng ký Họ tên / Level — dashboard cần Level để tra mốc KPI & % commission. Đăng xuất rồi đăng nhập lại để đăng ký.';
+      return;
+    }
+    if (!lvDef) {
+      emptyEl.style.display = 'block'; body.style.display = 'none';
+      emptyEl.textContent = profileKnown
+        ? 'Không nhận diện được Level "' + ((profile && profile.level) || '—') + '" — kiểm tra lại sheet Danh sách CS (đúng chuẩn "CS level 3", "CS_A level 1"…).'
+        : 'Backend chưa cập nhật (chưa trả về profile) — deploy lại Apps Script theo hướng dẫn để dùng Dashboard.';
+      return;
+    }
+    emptyEl.style.display = 'none'; body.style.display = 'block';
+    dashInitMonth();
+    try {
+      var p = dashPerf(dbMonthKey);
+      var rating = dashRating(lvDef, p);
+      dashRenderPerf(lvDef, p, rating);
+      dashRenderCommission(lvDef, p, rating);
+      dashRenderHealth();
+      dashRenderRadar();
+      dashRenderNote(lvDef);
+    } catch (err) {
+      console.error('renderDashboard error:', err);
+      showToast('Lỗi hiển thị Dashboard: ' + err.message, 'err');
+    }
   }
 
   // wiring

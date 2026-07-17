@@ -55,6 +55,54 @@
   </section>
 
   <!-- =====================================================
+       REGISTRATION SCREEN — lần đầu đăng nhập
+       ===================================================== -->
+  <section class="reg-screen" role="main">
+    <div class="login-card reg-card">
+      <div class="login-tab"><span class="dot"></span>FIRST LOGIN · SETUP</div>
+
+      <div class="brand">
+        <div class="brand-mark"><span>CS</span></div>
+        <div class="name">Đăng ký thông tin<small>Dùng để tính Performance &amp; Commission</small></div>
+      </div>
+
+      <p class="login-sub reg-sub">Tài khoản <b id="regEmail"></b> lần đầu vào hệ thống.<br>
+      Điền thông tin bên dưới — thông tin sẽ được lưu vào sheet <b>Danh sách CS</b> và dùng để tính lương &amp; performance qua các tháng.</p>
+
+      <div class="reg-form">
+        <div class="reg-field">
+          <label for="regName">Họ và tên</label>
+          <input type="text" id="regName" placeholder="VD: Nguyễn Lê Thanh Trường" autocomplete="name">
+        </div>
+
+        <div class="reg-field">
+          <label for="regLevel">Level</label>
+          <select id="regLevel">
+            <option value="">— Chọn level —</option>
+          </select>
+          <div class="reg-hint" id="regLevelHint"></div>
+        </div>
+
+        <div class="reg-field">
+          <label for="regSalary">Salary (VNĐ/tháng)</label>
+          <input type="number" id="regSalary" placeholder="Chọn level trước" disabled>
+          <div class="reg-hint" id="regSalaryHint"></div>
+        </div>
+
+        <button class="gbtn reg-submit" id="regSubmit">
+          <svg class="spinner hidden" id="regSpinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle></svg>
+          <span id="regBtnText">Lưu &amp; vào hệ thống</span>
+        </button>
+        <div class="reg-err" id="regErr"></div>
+      </div>
+
+      <div class="login-foot">
+        <span class="heart">⌁</span> Chỉ hỏi <b>một lần</b> — sửa sau tại sheet Danh sách CS
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================
        APP SCREEN
        ===================================================== -->
   <div class="app-wrapper">
@@ -82,6 +130,15 @@
       <!-- TAB: TỔNG QUAN -->
       <section class="tab-panel" id="panel-overview">
 
+        <div class="profile-strip" id="profileStrip" style="display:none;">
+          <div class="ps-avatar" id="psAvatar">CS</div>
+          <div class="ps-info">
+            <div class="ps-name" id="psName">—</div>
+            <div class="ps-sub" id="psSub">—</div>
+          </div>
+          <div class="ps-chips" id="psChips"></div>
+        </div>
+
         <div class="filter-bar">
           <div class="filter-field">
             <label for="dateFrom">Nhận deal từ</label>
@@ -102,7 +159,12 @@
 
         <div class="health-strip" id="healthStrip"></div>
 
-        <div class="kpi-row">
+        <div class="kpi-row kpi-row-4">
+          <div class="kpi-card">
+            <div class="kpi-label">Số deal nhận</div>
+            <div class="kpi-value" id="kpiDeals">—</div>
+            <div class="kpi-sub" id="kpiDealsSub"></div>
+          </div>
           <div class="kpi-card">
             <div class="kpi-label">Tổng revenue đang thực hiện</div>
             <div class="kpi-value" id="kpiRevenue">—</div>
@@ -195,9 +257,17 @@
           </div>
         </div>
 
+        <div class="fc-filter" id="fcFilter">
+          <div class="fc-filter-month">
+            <label for="fcFilterMonth">Tháng làm việc</label>
+            <select id="fcFilterMonth" class="fc-month"></select>
+          </div>
+          <div class="fc-chips" id="fcChips"></div>
+        </div>
+
         <div class="table-card">
           <div class="table-head">
-            <div class="chart-title">Deal của tôi <span class="chart-note">(nguồn: sheet Database)</span></div>
+            <div class="chart-title">Deal của tôi <span class="chart-note">(nguồn: sheet Database)</span> <span class="fc-filter-note" id="fcFilterNote"></span></div>
             <div class="table-hint"><span class="fc-legend-dot"></span> Ô vàng nhập tay · phần còn lại tự tính</div>
           </div>
           <div class="table-scroll">
@@ -222,9 +292,69 @@
 
       <!-- TAB: DASHBOARD -->
       <section class="tab-panel" id="panel-dashboard" style="display:none;">
-        <div class="placeholder-card">
-          <h3>Dashboard — sắp ra mắt</h3>
-          <p>Phần này sẽ gồm: health board theo tháng, tiến độ CR/SRR_1/SRR_4 so với mốc KPI / GOAL / OUT của level hiện tại. Build ở bước tiếp theo.</p>
+
+        <div class="dash-hero" id="dashHero">
+          <div class="dash-hero-left">
+            <div class="ps-avatar" id="dbAvatar">CS</div>
+            <div>
+              <div class="ps-name" id="dbName">—</div>
+              <div class="ps-sub" id="dbSub">—</div>
+            </div>
+          </div>
+          <div class="dash-hero-right">
+            <label for="dbMonth">Tháng đánh giá</label>
+            <select id="dbMonth" class="fc-month"></select>
+          </div>
+        </div>
+
+        <div class="dash-empty" id="dashEmpty" style="display:none;"></div>
+
+        <div id="dashBody" style="display:none;">
+
+          <!-- PERFORMANCE vs KPI/GOAL/OUT -->
+          <div class="chart-card dash-card">
+            <div class="chart-title">Performance tháng <span class="chart-note">— so với mốc KPI / GOAL / OUT của level (chính sách mục 6.2)</span></div>
+            <div class="perf-grid" id="perfGrid"></div>
+            <div class="perf-rating" id="perfRating"></div>
+          </div>
+
+          <!-- COMMISSION -->
+          <div class="table-card dash-card">
+            <div class="table-head">
+              <div class="chart-title">Commission trong tháng <span class="chart-note">— chính sách mục 6.3 &amp; 6.5</span></div>
+              <div class="table-hint" id="comRateHint"></div>
+            </div>
+            <div class="table-scroll">
+              <table class="deal-table com-table">
+                <thead>
+                  <tr>
+                    <th>Deal</th><th>Kỳ</th><th class="num">ACR</th>
+                    <th class="num">CHS_CS</th><th>Điều kiện ≥ 50</th>
+                    <th class="num">% Com</th><th class="num">Commission</th>
+                  </tr>
+                </thead>
+                <tbody id="comTbody"></tbody>
+                <tfoot id="comTfoot"></tfoot>
+              </table>
+            </div>
+            <div class="empty" id="comEmpty" style="display:none;"></div>
+          </div>
+
+          <!-- HEALTH BOARD + RADAR -->
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="chart-title">Sức khỏe portfolio <span class="chart-note">(CHS_CS mốc gần nhất)</span></div>
+              <div class="health-strip" id="dbHealthStrip" style="margin:12px 0 8px;"></div>
+              <div class="health-counts" id="dbHealthCounts"></div>
+              <div class="rescue-list" id="dbRescue"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Radar kỳ đo sắp tới <span class="chart-note">(ACR đang "treo" theo mốc T1 / T4)</span></div>
+              <div class="radar-list" id="dbRadar"></div>
+            </div>
+          </div>
+
+          <p class="dash-note" id="dashNote"></p>
         </div>
       </section>
 
