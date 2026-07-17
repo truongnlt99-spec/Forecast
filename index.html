@@ -113,12 +113,14 @@
       </div>
 
       <nav class="tabs" id="tabNav">
-        <button class="tab active" data-tab="overview">Tổng quan</button>
+        <button class="tab active" data-tab="overview">Overview</button>
         <button class="tab" data-tab="forecast">Forecast</button>
-        <button class="tab" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="dashboard">Scorecard</button>
       </nav>
 
       <div class="user-box">
+        <button class="btn" id="playbookBtn" title="Hướng dẫn sử dụng tool">📘 Playbook</button>
+        <button class="btn" id="changelogBtn" title="Lịch sử cập nhật">🕘 Changelog</button>
         <button class="btn" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet">↻ Làm mới</button>
         <span id="userEmail"></span>
         <button class="btn" id="logoutBtn">Đăng xuất</button>
@@ -250,7 +252,7 @@
           <div class="kpi-card kpi-press">
             <div class="kpi-label fc-press-head">
               <span>DT phải go-live · không muộn</span>
-              <select id="fcMonth" class="fc-month"></select>
+              <span class="fc-press-month" id="fcPressMonthLabel"></span>
             </div>
             <div class="kpi-value" id="fcPress" style="font-size:20px;">—</div>
             <div class="kpi-sub" id="fcPressSub"></div>
@@ -259,7 +261,7 @@
 
         <div class="fc-filter" id="fcFilter">
           <div class="fc-filter-month">
-            <label for="fcFilterMonth">Tháng làm việc</label>
+            <label for="fcFilterMonth">Tháng làm việc <span class="fc-filter-month-hint">— áp dụng cho cả bộ lọc &amp; ô "DT phải go-live"</span></label>
             <select id="fcFilterMonth" class="fc-month"></select>
           </div>
           <div class="fc-chips" id="fcChips"></div>
@@ -359,6 +361,32 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- =====================================================
+       MODAL: CHANGELOG
+       ===================================================== -->
+  <div class="modal-overlay" id="changelogModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h3>🕘 Changelog</h3>
+        <button class="modal-x" id="changelogClose" aria-label="Đóng">✕</button>
+      </div>
+      <div class="modal-body" id="changelogBody"></div>
+    </div>
+  </div>
+
+  <!-- =====================================================
+       MODAL: PLAYBOOK (hướng dẫn sử dụng)
+       ===================================================== -->
+  <div class="modal-overlay" id="playbookModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h3>📘 Playbook</h3>
+        <button class="modal-x" id="playbookClose" aria-label="Đóng">✕</button>
+      </div>
+      <div class="modal-body" id="playbookBody"></div>
+    </div>
   </div>
 
   <!-- ===== Scripts ===== -->

@@ -227,8 +227,24 @@
   }
 
   // =========================================================
-  // AUTH: Google Sign-in + API call
+  // CROSS-TAB NAVIGATION — bấm 1 deal ở Overview/Scorecard →
+  // nhảy sang Forecast, tự lọc đúng deal đó để sửa ngay.
   // =========================================================
+  function goToForecastDeal(id, name) {
+    fcFocusId = id; fcFocusName = name || '';
+    switchTab('forecast');
+    var afterReady = function () {
+      fcInitFilterMonth(); fcRenderChips(); fcRenderKpis(); fcRenderTable();
+      var row = $('fc-row-' + id);
+      if (row) {
+        if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('fc-flash');
+        setTimeout(function () { row.classList.remove('fc-flash'); }, 2200);
+      }
+    };
+    if (!fcLoaded) fcLoad(false, afterReady);
+    else afterReady();
+  }
 function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     fetch(CFG.API_URL + '?token=' + encodeURIComponent(token))
       .then(function (r) { return r.text(); })
@@ -552,11 +568,11 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       avg = Math.round(avg * 10) / 10;
       $('kpiChs').textContent = String(avg).replace('.', ',');
       $('kpiChs').style.color = 'var(--' + healthBand(avg) + ')';
-      $('kpiChsSub').textContent = 'Trên ' + scored.length + ' deal đã có điểm';
+      $('kpiChsSub').textContent = 'Trên ' + scored.length + ' deal · nguồn CHS_CS T4 (chưa có thì lấy T1)';
     } else {
       $('kpiChs').textContent = '—';
       $('kpiChs').style.color = '';
-      $('kpiChsSub').textContent = 'Chưa có deal nào được chấm CHS_CS';
+      $('kpiChsSub').textContent = 'Chưa có deal nào được chấm CHS_CS T1/T4';
     }
 
     var counts = countBands(deals);
@@ -730,8 +746,12 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
 
     var detail = document.createElement('tr');
     detail.className = 'detail-row';
-    detail.innerHTML = '<td colspan="6">' + grid + bars + '</td>';
+    detail.innerHTML = '<td colspan="6">' + grid + bars +
+      '<div class="detail-actions"><button class="btn detail-goto-fc" id="detailGoto">→ Mở trong Forecast để sửa số liệu</button></div>' +
+      '</td>';
     tr.parentNode.insertBefore(detail, tr.nextSibling);
+    var gotoBtn = $('detailGoto');
+    if (gotoBtn) gotoBtn.addEventListener('click', function () { goToForecastDeal(deal.id, deal.name); });
   }
 
   function miniBar(label, pct) {
@@ -1062,6 +1082,8 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // =========================================================
   var fcFilterKey = 'needNow';      // chip đang chọn
   var fcFilterMonthKey = mKeyNow(); // tháng làm việc
+  var fcFocusId = null;             // set khi nhảy từ Overview/Scorecard sang xem đúng 1 deal
+  var fcFocusName = '';
 
   // Phân loại 1 deal theo các "việc cần làm" trong tháng làm việc
   function fcTags(d) {
@@ -1104,8 +1126,15 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
 
   function fcFilteredDeals() {
     if (!fcDeals) return [];
+    if (fcFocusId) return fcDeals.filter(function (d) { return d.id === fcFocusId; });
     if (fcFilterKey === 'all') return fcDeals;
     return fcDeals.filter(function (d) { return !!fcTags(d)[fcFilterKey]; });
+  }
+
+  function fcClearFocus() {
+    fcFocusId = null; fcFocusName = '';
+    fcFilterKey = 'all'; // nút ghi "xem tất cả" thì phải thật sự về view Tất cả, không giữ lại chip trước đó
+    fcRenderChips(); fcRenderTable();
   }
 
   function fcInitFilterMonth() {
@@ -1121,13 +1150,25 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     sel.value = mKeyNow();
     sel.addEventListener('change', function () {
       fcFilterMonthKey = sel.value;
-      fcRenderChips(); fcRenderTable();
+      fcRenderChips(); fcRenderKpis(); fcRenderTable();
     });
   }
 
   function fcRenderChips() {
     var box = $('fcChips');
     if (!box || !fcDeals) return;
+
+    if (fcFocusId) {
+      box.innerHTML =
+        '<span class="fc-focus-banner">🔗 Đang xem 1 deal: <b>' + esc(fcFocusName || fcFocusId) + '</b></span>' +
+        '<button class="chip-btn fc-focus-clear" id="fcClearFocusBtn">✕ Bỏ lọc, xem tất cả</button>';
+      var clearBtn = $('fcClearFocusBtn');
+      if (clearBtn) clearBtn.addEventListener('click', fcClearFocus);
+      var noteEl = $('fcFilterNote');
+      if (noteEl) noteEl.textContent = '· đang lọc theo deal được chọn';
+      return;
+    }
+
     var counts = { all: fcDeals.length, needNow: 0, missPast: 0, notYet: 0, dueSoon: 0, overdue: 0, over200: 0 };
     fcDeals.forEach(function (d) {
       var t = fcTags(d);
@@ -1162,7 +1203,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     if (v == null) return '<span class="badge chs-none">—</span>';
     return '<span class="badge chs-' + healthBand(v) + '">' + String(v).replace('.', ',') + '</span>';
   }
-  function fcMonthCmp(a, b) { var p = a.split('/'), q = b.split('/'); return (p[1] - q[1]) || (p[0] - q[0]); }
+  // (fcMonthCmp cũ đã gộp vào mCmp ở trên — dùng chung 1 hàm so sánh tháng MM/YYYY)
   function fcFlag(t) { var el = $('fcFlag'); if (el) el.textContent = t; }
 
   function fcSetKpi(id, val, cnt) {
@@ -1242,16 +1283,14 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       if (!r.late) byM[m].sach += d.dtPhai || 0;
       byM[m].dat += r.dtDat;
     });
-    var months = Object.keys(byM).filter(function (m) { return m !== '—'; }).sort(fcMonthCmp);
-    var sel = $('fcMonth');
-    if (sel && sel.options.length === 0 && months.length) {
-      months.forEach(function (m) { var o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); });
-      sel.value = months.indexOf('08/2026') > -1 ? '08/2026' : months[months.length - 1];
-    }
-    var cur = sel ? sel.value : (months[months.length - 1] || '');
+    // Dùng chung 1 bộ chọn tháng duy nhất (fcFilterMonthKey) cho cả bộ lọc chip
+    // lẫn ô KPI "DT phải go-live" — trước đây có 2 dropdown tháng riêng biệt
+    // (#fcMonth và #fcFilterMonth) đứng cạnh nhau gây nhầm lẫn, nay gộp lại.
+    var cur = fcFilterMonthKey || mKeyNow();
     var cd = byM[cur] || { phai: 0, sach: 0, dat: 0 };
     $('fcPress').textContent = fmtMoney(cd.sach);
     $('fcPressSub').textContent = 'gồm cả muộn: ' + fmtMoneyShort(cd.phai) + ' · đã go-live: ' + fmtMoneyShort(cd.dat);
+    var lbl = $('fcPressMonthLabel'); if (lbl) lbl.textContent = 'tháng ' + cur;
   }
 
   function fcRenderTable() {
@@ -1261,9 +1300,11 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     var empty = $('fcEmpty');
     if (empty) {
       empty.style.display = list.length ? 'none' : 'block';
-      if (!list.length) empty.textContent = fcDeals.length
-        ? 'Không có deal nào thuộc nhóm này trong tháng ' + fcFilterMonthKey + ' — thử chip khác hoặc "Tất cả".'
-        : 'Sheet Database chưa có deal nào.';
+      if (!list.length) empty.textContent = fcFocusId
+        ? 'Không tìm thấy deal này trong danh sách của bạn (có thể đã đổi người phụ trách).'
+        : fcDeals.length
+          ? 'Không có deal nào thuộc nhóm này trong tháng ' + fcFilterMonthKey + ' — thử chip khác hoặc "Tất cả".'
+          : 'Sheet Database chưa có deal nào.';
     }
     tb.innerHTML = list.map(function (d) {
       var r = fcCompute(d);
@@ -1563,7 +1604,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         var pass = chs != null && chs >= 50;
         var com = (pass && rate != null) ? Math.round((d.acr || 0) * rate / 100) : 0;
         if (ky === 'T1') totT1 += com; else totT4 += com;
-        rows.push('<tr class="' + (pass ? '' : 'com-fail') + '">' +
+        rows.push('<tr class="com-row' + (pass ? '' : ' com-fail') + '" data-id="' + esc(d.id) + '" data-name="' + esc(d.name) + '">' +
           '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
           '<td><span class="badge ' + (ky === 'T1' ? 'ky-t1' : 'ky-t4') + '">' + ky + ' · ' + esc(p.m) + '</span></td>' +
           '<td class="num">' + fmtMoney(d.acr) + '</td>' +
@@ -1586,6 +1627,11 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     var usBonus = Math.round(usBase * usPct / 100);
 
     tb.innerHTML = rows.join('');
+    tb.querySelectorAll('.com-row').forEach(function (tr) {
+      tr.addEventListener('click', function () {
+        goToForecastDeal(tr.getAttribute('data-id'), tr.getAttribute('data-name'));
+      });
+    });
     emptyEl.style.display = rows.length ? 'none' : 'block';
     if (!rows.length) emptyEl.textContent = 'Không có deal nào tới kỳ đo T1/T4 trong tháng ' + p.m + '.';
 
@@ -1635,9 +1681,15 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       ? '<div class="rescue-ok">Không có deal nào CHS_T1 &lt; 50 còn chờ kỳ T4 — ổn ✓</div>'
       : '<div class="rescue-head">⚠ Cần cứu trước kỳ đo T4 (CHS_T1 &lt; 50):</div>' +
         rescue.slice(0, 6).map(function (x) {
-          return '<div class="rescue-item"><span class="rn">' + esc(x.d.name) + '</span>' +
-            '<span class="rv">' + fcChsBadge(x.chs) + ' · T4: ' + esc(x.d.monthT4) + ' · ACR ' + fmtMoneyShort(x.d.acr) + '</span></div>';
+          return '<div class="rescue-item rescue-clickable" data-id="' + esc(x.d.id) + '" data-name="' + esc(x.d.name) + '">' +
+            '<span class="rn">' + esc(x.d.name) + '</span>' +
+            '<span class="rv">' + fcChsBadge(x.chs) + ' · T4: ' + esc(x.d.monthT4) + ' · ACR ' + fmtMoneyShort(x.d.acr) + ' →</span></div>';
         }).join('') + (rescue.length > 6 ? '<div class="rescue-more">… và ' + (rescue.length - 6) + ' deal khác</div>' : '');
+    $('dbRescue').querySelectorAll('.rescue-clickable').forEach(function (el) {
+      el.addEventListener('click', function () {
+        goToForecastDeal(el.getAttribute('data-id'), el.getAttribute('data-name'));
+      });
+    });
   }
 
   // ---- Radar kỳ đo 3 tháng tới: ACR đang "treo" theo mốc T1/T4 ----
@@ -1720,10 +1772,91 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     }
   }
 
+  // =========================================================
+  // CHANGELOG — mỗi lần cập nhật tool, thêm 1 entry mới lên ĐẦU mảng này.
+  // =========================================================
+  var CHANGELOG = [
+    {
+      date: '17/07/2026',
+      title: 'Hợp nhất bộ chọn tháng · liên kết chéo tab · đổi tên header',
+      items: [
+        'Forecast: gộp 2 dropdown tháng (KPI "DT phải go-live" và bộ lọc chip) thành 1 — trước đây 2 ô đứng cạnh nhau dễ nhầm.',
+        'Bấm vào 1 deal ở Overview (mục chi tiết) hoặc Scorecard (rescue list / bảng commission) → nhảy thẳng sang Forecast, tự lọc đúng deal đó để sửa số liệu.',
+        'Đổi tên tab: "Tổng quan" → Overview, "Dashboard" → Scorecard.',
+        'Overview: KPI CHS_CS ghi rõ nguồn (ưu tiên CHS_CS T4, chưa có thì lấy T1).',
+        'Thêm nút Changelog & Playbook trên header.',
+      ],
+    },
+    {
+      date: '15/07/2026',
+      title: 'Big Update: đăng ký lần đầu · profile · Scorecard',
+      items: [
+        'Thêm màn đăng ký bắt buộc lần đầu đăng nhập (Họ tên / Level / Salary) → lưu vào sheet "Danh sách CS".',
+        'Overview: thêm profile strip (tên, level, lương) + KPI "Số deal nhận".',
+        'Forecast: thêm bộ lọc theo tháng làm việc + 7 chip (kỳ đo tháng này, thiếu số kỳ đã qua, chưa GL theo các mốc, quá 200% TTGL).',
+        'Ra mắt tab Dashboard (nay là Scorecard): Performance vs KPI/GOAL/OUT theo policy 6.2, bảng Commission 6.3 + 6.5, sức khỏe portfolio, radar kỳ đo 3 tháng tới.',
+        'Fix bug: sửa 1 ô % rồi Lưu có thể xóa mất ngày Go-live đã lưu trên sheet (do payload gửi goLive rỗng) — nay giữ nguyên giá trị đã lưu nếu không sửa.',
+        'Fix bug: CHS T1/T4 ở Forecast trước chỉ tính theo ô đang sửa, deal đã có số trên sheet vẫn hiện "—" — nay tính trên dữ liệu đã lưu.',
+      ],
+    },
+  ];
+
+  function renderChangelog() {
+    $('changelogBody').innerHTML = CHANGELOG.map(function (rel) {
+      return '<div class="cl-entry">' +
+        '<div class="cl-date">' + esc(rel.date) + '</div>' +
+        '<div class="cl-title">' + esc(rel.title) + '</div>' +
+        '<ul class="cl-list">' + rel.items.map(function (it) { return '<li>' + esc(it) + '</li>'; }).join('') + '</ul>' +
+        '</div>';
+    }).join('');
+  }
+
+  // =========================================================
+  // PLAYBOOK — hướng dẫn sử dụng theo từng tab
+  // =========================================================
+  function renderPlaybook() {
+    $('playbookBody').innerHTML =
+      '<div class="pb-section">' +
+        '<h4>Overview</h4>' +
+        '<p>Nhìn lại toàn bộ deal đang phụ trách: lọc theo khoảng ngày nhận deal, xem tổng revenue, CHS_CS trung bình (lấy từ CHS_CS T4, chưa có thì T1), và cơ cấu theo bộ giải pháp / loại hợp đồng.</p>' +
+        '<p><b>Mẹo:</b> bấm vào 1 dòng deal để mở chi tiết ngay dưới dòng đó, có nút <i>"→ Mở trong Forecast để sửa số liệu"</i> để nhảy thẳng sang tab Forecast.</p>' +
+      '</div>' +
+      '<div class="pb-section">' +
+        '<h4>Forecast</h4>' +
+        '<p>Nơi duy nhất được nhập tay 5 ô vàng: <b>Go-live thực tế, %Active T1/T4, %Output T1/T4</b>. Các cột còn lại (Tier, Trạng thái, CHS T1/T4, ACR) tự tính lại ngay khi bạn gõ, và chỉ đẩy về sheet khi bấm <b>"Lưu &amp; đẩy về sheet"</b>.</p>' +
+        '<p><b>Tháng làm việc</b> ở thanh lọc dùng chung cho cả 7 chip lọc lẫn ô KPI "DT phải go-live". Ưu tiên xử lý theo thứ tự: <i>Thiếu số kỳ đã qua</i> (khẩn nhất — CHS trống là mất luôn nền commission của deal đó) → <i>Kỳ đo T1/T4 tháng này</i> → các chip "Chưa GL".</p>' +
+      '</div>' +
+      '<div class="pb-section">' +
+        '<h4>Scorecard</h4>' +
+        '<p>Chọn "Tháng đánh giá" để xem Performance (CR/SRR_1/SRR_4 so với mốc KPI/GOAL/OUT của đúng level bạn đã đăng ký — theo chính sách mục 6.2), bảng Commission chi tiết từng deal (mục 6.3 + thưởng Upsale/Cross mục 6.5), sức khỏe portfolio và deal "cần cứu" trước kỳ đo T4.</p>' +
+        '<p><b>Mẹo:</b> bấm vào deal trong danh sách "cần cứu" hoặc bảng Commission để nhảy thẳng sang Forecast sửa số liệu của đúng deal đó.</p>' +
+      '</div>' +
+      '<div class="pb-section pb-note">' +
+        '<h4>Lưu ý chung</h4>' +
+        '<p>Thông tin Level/Salary chỉ khai báo 1 lần lúc đăng ký — muốn sửa thì báo Operation cập nhật trực tiếp ở sheet "Danh sách CS".</p>' +
+      '</div>';
+  }
+
+  function openModal(id) { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+
+  (function () {
+    var pBtn = $('playbookBtn'), pClose = $('playbookClose'), pModal = $('playbookModal');
+    var cBtn = $('changelogBtn'), cClose = $('changelogClose'), cModal = $('changelogModal');
+    if (pBtn) pBtn.addEventListener('click', function () { renderPlaybook(); openModal('playbookModal'); });
+    if (pClose) pClose.addEventListener('click', function () { closeModal('playbookModal'); });
+    if (pModal) pModal.addEventListener('click', function (e) { if (e.target === pModal) closeModal('playbookModal'); });
+    if (cBtn) cBtn.addEventListener('click', function () { renderChangelog(); openModal('changelogModal'); });
+    if (cClose) cClose.addEventListener('click', function () { closeModal('changelogModal'); });
+    if (cModal) cModal.addEventListener('click', function (e) { if (e.target === cModal) closeModal('changelogModal'); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { closeModal('playbookModal'); closeModal('changelogModal'); }
+    });
+  })();
+
   // wiring
   (function () {
     var b = $('fcSaveBtn'); if (b) b.addEventListener('click', fcSave);
-    var m = $('fcMonth');   if (m) m.addEventListener('change', fcRenderKpis);
   })();
 
 })();
