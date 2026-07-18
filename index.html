@@ -2,7 +2,8 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
 <title>Customer Success — Personal Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -150,11 +151,11 @@
       </nav>
 
       <div class="user-box">
-        <button class="btn" id="playbookBtn" title="Hướng dẫn sử dụng tool">📘 Playbook</button>
-        <button class="btn" id="changelogBtn" title="Lịch sử cập nhật">🕘 Changelog</button>
-        <button class="btn" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet">↻ Làm mới</button>
+        <button class="btn" id="playbookBtn" title="Hướng dẫn sử dụng tool" aria-label="Playbook"><span class="btn-ico">📘</span><span class="btn-txt">Playbook</span></button>
+        <button class="btn" id="changelogBtn" title="Lịch sử cập nhật" aria-label="Changelog"><span class="btn-ico">🕘</span><span class="btn-txt">Changelog</span></button>
+        <button class="btn" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet" aria-label="Làm mới"><span class="btn-ico">↻</span><span class="btn-txt">Làm mới</span></button>
         <span id="userEmail"></span>
-        <button class="btn" id="logoutBtn">Đăng xuất</button>
+        <button class="btn" id="logoutBtn" title="Đăng xuất" aria-label="Đăng xuất"><span class="btn-ico">⏻</span><span class="btn-txt">Đăng xuất</span></button>
       </div>
     </header>
 

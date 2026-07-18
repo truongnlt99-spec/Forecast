@@ -894,3 +894,189 @@ body.boot-mode .app-wrapper { display: none; }
 }
 .uo-pill.uo-u { background: #E8EDFB; color: var(--accent); }
 .uo-pill.uo-o { background: #EFEAFE; color: var(--purple); }
+
+
+/* ============================================================
+   MOBILE / RESPONSIVE OVERHAUL  —  đặt CUỐI FILE (ghi đè các
+   media query cũ ở trên). Breakpoints: 900 → 768 → 560 → 400
+   ============================================================ */
+
+/* ---------- Chống zoom iOS: mọi input < 16px đều bị Safari phóng to ---------- */
+@media (max-width: 768px) {
+  input, select, textarea,
+  .filter-field input, .filter-field select,
+  .search-input, .fc-search-input, .fc-month, .reg-field input, .reg-field select {
+    font-size: 16px !important;
+  }
+  .fc-in { font-size: 16px !important; padding: 7px 8px; }
+  .fc-in.fc-pct { width: 100%; min-width: 56px; }
+  .fc-in.fc-date { width: 100%; min-width: 130px; }
+}
+
+@media (max-width: 768px) {
+
+  /* ---------- 1. Khung chung: bỏ padding body, dùng padding trong ---------- */
+  body { padding: 0; overflow-x: hidden; }
+  body.app-mode { padding: 0; }
+  body.login-mode, body.reg-mode, body.boot-mode { padding: 16px; }
+
+  .app-content {
+    padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+    max-width: 100%;
+  }
+
+  /* Nền lưới + công thức bay: nặng, gây tràn ngang, mobile bỏ hẳn */
+  body.app-mode .grid-layer,
+  body.app-mode .math-layer { display: none; }
+  .m.min { display: none; }
+
+  /* Không cho bất kỳ flex/grid item nào đẩy tràn ngang */
+  .filter-bar > *, .fc-filter-row > *, .fc-view-toggle > *,
+  .profile-strip > *, .dash-hero > *, .kpi-card > *, .chart-card > * { min-width: 0; }
+  .kpi-sub, .ps-sub, .fc-flag, .legend-name { overflow-wrap: anywhere; }
+
+  /* ---------- 2. Header: 2 dòng cố định, hết nhảy lung tung ---------- */
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    row-gap: 8px; column-gap: 8px;
+    padding: 8px 12px;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    flex-wrap: nowrap;
+  }
+  .topbar-brand { grid-row: 1; grid-column: 1; min-width: 0; gap: 8px; }
+  .topbar-mark { height: 18px; width: 8px; }
+  .topbar h1 {
+    font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .user-box { grid-row: 1; grid-column: 2; gap: 6px; justify-self: end; }
+  .user-box #userEmail { display: none; }          /* email dài → bể layout */
+  .user-box .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 38px; min-height: 38px;             /* touch target đủ lớn */
+    padding: 0 9px; font-size: 15px; line-height: 1;
+  }
+  .user-box .btn .btn-txt { display: none; }        /* chỉ còn icon */
+
+  /* Tabs = segmented control chiếm trọn dòng 2 */
+  .tabs {
+    grid-row: 2; grid-column: 1 / -1;
+    width: 100%; margin-right: 0; order: 0;
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 10px; padding: 3px; gap: 3px;
+  }
+  .tab { flex: 1 1 0; min-width: 0; text-align: center; padding: 9px 4px; font-size: 13.5px; }
+
+  /* ---------- 3. Bỏ chữ mô tả chỉ hợp desktop ---------- */
+  .chart-note, .table-hint, .fc-filter-note, .radar-hint,
+  .dash-note, .fc-bar-info p, .pr-note, .mc-hint,
+  .table-head .table-hint, .empty br { display: none; }
+  .login-sub { font-size: 13px; }
+
+  /* ---------- 4. Filter bar: mỗi field 1 dòng, full width ---------- */
+  .filter-bar { padding: 12px; gap: 10px; }
+  .filter-field { flex: 1 1 100%; min-width: 0; }
+  .filter-field select, .filter-field input, .filter-field .search-input {
+    width: 100%; min-width: 0;
+  }
+  .search-input, .fc-search-input { min-width: 0; width: 100%; }
+  .filter-count { margin-left: 0; width: 100%; }
+  .ov-custom-range { flex-wrap: wrap; gap: 10px; }
+
+  /* ---------- 5. KPI / chart ---------- */
+  .kpi-row, .kpi-row-4, .fc-kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi-card { padding: 13px; }
+  .kpi-value { font-size: 21px; }
+  .kpi-card.kpi-health, .kpi-card.kpi-press { grid-column: 1 / -1; }
+  .chart-row { grid-template-columns: 1fr; gap: 10px; }
+  .chart-card { padding: 13px; }
+  .donut-wrap { flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .legend { flex: 1 1 100%; }
+  .perf-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ---------- 6. Bảng: cuộn ngang có kiểm soát + ghim cột Khách hàng ---------- */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .deal-table { font-size: 13px; }
+  .deal-table th { padding: 9px 10px; font-size: 10px; }
+  .deal-table td { padding: 9px 10px; }
+  .deal-name { max-width: 150px; }
+
+  .deal-table th:first-child,
+  .deal-table td:first-child {
+    position: sticky; left: 0; z-index: 3;
+    background: var(--card);
+    box-shadow: 1px 0 0 var(--line);
+  }
+  .deal-table thead th:first-child { z-index: 4; }
+  tr.deal-row:hover td:first-child, tr.deal-row.open td:first-child { background: #F4F6F9; }
+  /* dòng chi tiết trải ngang → không được sticky */
+  tr.detail-row td, tr.detail-row td:first-child {
+    position: static; box-shadow: none; white-space: normal;
+  }
+  .detail-grid { grid-template-columns: 1fr; gap: 10px; }
+  .mini-bars { gap: 12px; }
+  .mini-bar { min-width: 0; flex: 1 1 100%; }
+
+  /* ---------- 7. Forecast ---------- */
+  .fc-bar, .fc-bar-slim { padding: 10px 12px; }
+  .fc-bar-actions { width: 100%; justify-content: space-between; }
+  .fc-save { flex: 1; min-height: 42px; }           /* nút lưu dễ bấm */
+  .fc-view-toggle { gap: 6px; }
+  .fc-view-btn { flex: 1 1 0; min-height: 40px; }
+  .fc-search-input { margin-left: 0; flex: 1 1 100%; order: 3; }
+  .fc-filter-slim { padding: 10px 12px; }
+  .fc-filter-row { gap: 8px; }
+  .fc-cols-toggle { margin-left: auto; min-height: 36px; }
+  .fc-chip, .chip-btn { min-height: 32px; display: inline-flex; align-items: center; }
+
+  /* ---------- 8. Profile / dashboard hero ---------- */
+  .profile-strip, .dash-hero { padding: 12px; gap: 10px; }
+  .ps-chips { margin-left: 0; flex: 1 1 100%; }
+  .dash-hero-right { width: 100%; }
+  .dash-hero-right .fc-month { flex: 1; }
+
+  /* ---------- 9. Modal: gần full màn ---------- */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-panel {
+    max-width: 100%; width: 100%;
+    max-height: 92dvh; border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .modal-body { padding: 16px; }
+  .modal-x { min-width: 40px; min-height: 40px; font-size: 18px; }
+
+  /* ---------- 10. Toast: bám mép trên, không tràn ---------- */
+  .toast {
+    top: calc(10px + env(safe-area-inset-top));
+    left: 10px; right: 10px; max-width: none;
+  }
+
+  /* ---------- 11. Login / register ---------- */
+  .login-card { padding: 30px 20px 22px; }
+  .login-h1 { font-size: 24px; }
+  .reg-card { max-width: 100%; }
+  .gbtn, .reg-submit { min-height: 46px; }
+}
+
+/* ---------- Máy nhỏ (≤ 400px) ---------- */
+@media (max-width: 400px) {
+  .kpi-row, .kpi-row-4, .fc-kpis, .perf-grid { grid-template-columns: 1fr; }
+  .kpi-value { font-size: 20px; }
+  .topbar h1 { font-size: 14px; }
+  .tab { font-size: 12.5px; padding: 8px 2px; }
+  .user-box .btn { min-width: 36px; min-height: 36px; padding: 0 7px; }
+  .app-content { padding: 10px 10px calc(20px + env(safe-area-inset-bottom)); }
+  .login-h1 { font-size: 22px; }
+}
+
+/* ---------- Xoay ngang máy thấp: đừng để header ăn hết màn ---------- */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 480px) {
+  .topbar { position: static; }
+}
