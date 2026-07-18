@@ -814,3 +814,13 @@ tr.fc-flash td { animation: fcFlash 2.2s ease; }
   font-size: 10.5px; cursor: pointer; color: var(--accent);
 }
 .mc-use-hint:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ============================================
+   SCORECARD — phân biệt Năm 1 / ACR nhiều năm
+   ============================================ */
+.badge.yr-1 { background: var(--none-bg); color: var(--ink-soft); }
+.badge.yr-multi { background: var(--weak-bg); color: var(--weak); font-weight: 700; }
+tr.com-row-multi td { background: #FFFBF2; }
+tr.com-row-multi:hover td { background: #FFF6E6; }
+tr.com-row-multi td:first-child { border-left: 3px solid var(--amber); }
+.com-table tfoot .badge { vertical-align: middle; }

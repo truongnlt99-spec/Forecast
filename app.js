@@ -251,6 +251,19 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       .then(function (text) { return JSON.parse(text); })
       .then(function (data) {
         if (!data.ok) {
+          // QUAN TRỌNG: trước đây hễ thấy {ok:false} là xoá token đang hợp lệ + bắt
+          // đăng nhập lại — dù lỗi có thể chỉ là Apps Script tạm trục trặc (cold
+          // start, sheet đang khoá, quota…), chẳng liên quan gì đến việc đã đăng
+          // nhập hay chưa. Đây là nguyên nhân gây bug "cứ reload/hard-refresh là bị
+          // bắt đăng nhập lại" dù token còn hạn: chỉ MỘT lần backend trục trặc thoáng
+          // qua cũng đủ làm mất phiên đang hợp lệ. Nay chỉ xoá token & bắt đăng nhập
+          // lại khi backend xác nhận rõ ràng token không hợp lệ/hết hạn
+          // (error === 'invalid_token'); các lỗi khác chỉ báo lỗi, giữ nguyên phiên.
+          if (data.error !== 'invalid_token') {
+            showToast('Không tải được dữ liệu: ' + (data.error || 'lỗi không rõ') + ' — thử bấm "Làm mới".', 'err', 8000);
+            if (!isBackgroundRefresh) resetGoogleButton();
+            return;
+          }
           localStorage.removeItem('cs_tool_token');
           localStorage.removeItem(SESSION_KEY);
           if (silentRetryOnFail) {
@@ -897,6 +910,19 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       }
     }, 100);
   });
+
+  // =========================================================
+  // CHỦ ĐỘNG LÀM MỚI TOKEN ÂM THẦM — id_token của Google chỉ sống ~1h theo
+  // thiết kế (không đổi được). Để phiên làm việc cả ngày đỡ bị gián đoạn,
+  // cứ mỗi 50 phút (sớm hơn mốc hết hạn) thử âm thầm lấy token mới một lần;
+  // thất bại thì thôi, không ảnh hưởng gì — vẫn còn cơ chế fallback lúc
+  // reload/hết hạn thật như bình thường.
+  // =========================================================
+  setInterval(function () {
+    if (document.body.className === 'app-mode' && !silentReauthInProgress) {
+      trySilentSignIn(function () { /* im lặng bỏ qua nếu thất bại */ });
+    }
+  }, 50 * 60 * 1000);
 
   // =========================================================
   // GOOGLE SIGN-IN: 1 hàm prompt() dùng chung, có khoá để tránh gọi
@@ -1711,10 +1737,22 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       .then(function (text) {
         var d; try { d = JSON.parse(text); } catch (e) { d = { ok: true }; }
         if (d.ok) {
+          // QUAN TRỌNG: cập nhật thẳng vào fcDeals (bộ nhớ) đúng số vừa lưu, để
+          // Scorecard tính CHS_CS/commission ngay lập tức. Trước đây xoá mcState
+          // ngay mà KHÔNG cập nhật fcDeals → mcEff() rơi về d.years[n] cũ (thường
+          // trống), khiến Scorecard "không thấy" số vừa lưu dù sheet đã có đúng dữ
+          // liệu, phải bấm "Làm mới" thủ công mới lên. Patch trực tiếp thế này còn
+          // tránh phải gọi lại server (khỏi lo mất các ô Năm 1 đang sửa dở, nếu có).
+          rows.forEach(function (row) {
+            var deal = fcDeals.find(function (x) { return x.id === row.dealId; });
+            if (!deal || !deal.years || !deal.years[row.year]) return;
+            var y = deal.years[row.year];
+            if (row.period === 'T1') { y.aT1_0 = row.active; y.oT1_0 = row.output; }
+            else { y.aT4_0 = row.active; y.oT4_0 = row.output; }
+          });
           mcState = {};
           mcFlag('✓ đã lưu ' + rows.length + ' mục · ' + new Date().toLocaleTimeString('vi-VN'));
           showToast('Đã lưu ACR nhiều năm — chuyển sang Scorecard xem commission', 'ok');
-          // Yêu cầu: lưu xong tự nhảy Scorecard, chấm đúng tháng vừa nhập
           dbMonthKey = mcFilterMonthKey;
           var dbSel = $('dbMonth'); if (dbSel) dbSel.value = mcFilterMonthKey;
           switchTab('dashboard');
@@ -1912,20 +1950,27 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       return (addon != null) ? Math.round((baseRate + addon) * 100) / 100 : baseRate;
     }
 
-    var rows = [], totT1 = 0, totT4 = 0;
+    // NEW — tách riêng tổng Năm 1 và ACR nhiều năm để hiển thị rõ ràng, không gộp lẫn
+    var rows = [];
+    var totT1Y1 = 0, totT1Multi = 0, totT4Y1 = 0, totT4Multi = 0;
     var pushRows = function (list, ky, baseRate) {
       list.forEach(function (item) {
+        var isMulti = !!item.n;
         var d = item.d || item;                              // deal thường HOẶC {d,n,ky,month} multi-year
-        var yearTag = item.n ? (' · Năm ' + item.n) : '';
         var monthTag = item.month || p.m;
-        var chs = item.n ? mcChs(d, item.n, ky) : fcCompute(d)[ky === 'T1' ? 'cT1' : 'cT4'];
+        var chs = isMulti ? mcChs(d, item.n, ky) : fcCompute(d)[ky === 'T1' ? 'cT1' : 'cT4'];
         var pass = chs != null && chs >= 50;
         var rate = comboRate(d, baseRate, ky);
         var com = (pass && rate != null) ? Math.round((d.acr || 0) * rate / 100) : 0;
-        if (ky === 'T1') totT1 += com; else totT4 += com;
-        rows.push('<tr class="com-row' + (pass ? '' : ' com-fail') + '" data-id="' + esc(d.id) + '" data-name="' + esc(d.name) + '">' +
+        if (ky === 'T1') { if (isMulti) totT1Multi += com; else totT1Y1 += com; }
+        else { if (isMulti) totT4Multi += com; else totT4Y1 += com; }
+        var nguonBadge = isMulti
+          ? '<span class="badge yr-multi">Năm ' + item.n + '</span>'
+          : '<span class="badge yr-1">Năm 1</span>';
+        rows.push('<tr class="com-row' + (pass ? '' : ' com-fail') + (isMulti ? ' com-row-multi' : '') + '" data-id="' + esc(d.id) + '" data-name="' + esc(d.name) + '">' +
           '<td><div class="deal-name">' + esc(d.name) + '</div><div class="deal-id">' + esc(d.id) + '</div></td>' +
-          '<td><span class="badge ' + (ky === 'T1' ? 'ky-t1' : 'ky-t4') + '">' + ky + ' · ' + esc(monthTag) + esc(yearTag) + '</span></td>' +
+          '<td><span class="badge ' + (ky === 'T1' ? 'ky-t1' : 'ky-t4') + '">' + ky + ' · ' + esc(monthTag) + '</span></td>' +
+          '<td>' + nguonBadge + '</td>' +
           '<td class="num">' + fmtMoney(d.acr) + '</td>' +
           '<td class="num">' + fcChsBadge(chs) + '</td>' +
           '<td>' + (chs == null ? '<span class="badge chs-none">chưa có số</span>' : pass ? '<span class="badge gl-done">Đạt ✓</span>' : '<span class="badge gl-overdue">Không đạt</span>') + '</td>' +
@@ -1963,14 +2008,17 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
     if (!rows.length) emptyEl.textContent = 'Không có deal nào tới kỳ đo T1/T4 (kể cả ACR nhiều năm) trong tháng ' + p.m + '.';
 
     var salary = profile ? parseMoney(profile.salary) : null;
+    var totT1 = totT1Y1 + totT1Multi, totT4 = totT4Y1 + totT4Multi;
     var totalCom = totT1 + totT4 + usBonus;
     var frow = function (label, val, cls) {
-      return '<tr class="' + (cls || '') + '"><td colspan="6">' + label + '</td><td class="num"><b>' + val + '</b></td></tr>';
+      return '<tr class="' + (cls || '') + '"><td colspan="7">' + label + '</td><td class="num"><b>' + val + '</b></td></tr>';
     };
     tf.innerHTML =
-      frow('Σ Com hiệu quả triển khai 1 tháng (' + (p.t1Deals.length + multiT1.length) + ' deal đo T1, gồm ' + multiT1.length + ' ACR nhiều năm)', fmtMoney(totT1)) +
+      frow('Com hiệu quả triển khai 1 tháng · <span class="badge yr-1">Năm 1</span> (' + p.t1Deals.length + ' deal)', fmtMoney(totT1Y1)) +
+      (multiT1.length ? frow('Com hiệu quả triển khai 1 tháng · <span class="badge yr-multi">ACR nhiều năm</span> (' + multiT1.length + ' deal)', fmtMoney(totT1Multi)) : '') +
       (def.comT4
-        ? frow('Σ Com hiệu quả triển khai 4 tháng (' + (p.t4Deals.length + multiT4.length) + ' deal đo T4, gồm ' + multiT4.length + ' ACR nhiều năm)', fmtMoney(totT4))
+        ? frow('Com hiệu quả triển khai 4 tháng · <span class="badge yr-1">Năm 1</span> (' + p.t4Deals.length + ' deal)', fmtMoney(totT4Y1)) +
+          (multiT4.length ? frow('Com hiệu quả triển khai 4 tháng · <span class="badge yr-multi">ACR nhiều năm</span> (' + multiT4.length + ' deal)', fmtMoney(totT4Multi)) : '')
         : frow('Com 4 tháng — CS_A không áp dụng theo policy 6.3', '—')) +
       frow('Thưởng Upsale/Cross sale — DT ghi nhận ' + fmtMoneyShort(usBase) + ' (' + usDeals.length + ' PL) × ' + usPct + '%', fmtMoney(usBonus)) +
       frow('TỔNG COMMISSION THÁNG ' + p.m, fmtMoney(totalCom), 'com-total') +
