@@ -106,21 +106,76 @@
   });
 
   // =========================================================
-  // UI MODE (login vs app)
+  // ROUTER — điều hướng bằng hash (#/overview, #/forecast…).
+  //
+  // Vì tool host trên GitHub Pages (hosting tĩnh, không có server định tuyến),
+  // BẮT BUỘC phải dùng hash chứ không dùng path thật: nếu để URL kiểu
+  // /Forecast-Tool/forecast thì bấm F5 GitHub sẽ trả lỗi 404 vì trên server
+  // làm gì có thư mục tên "forecast" — hỏng đúng cái việc F5 mà ta đang muốn sửa.
+  // Hash (#/forecast) nằm sau dấu #, trình duyệt không gửi lên server nên F5
+  // luôn nạp đúng index.html rồi tự khôi phục tab — chạy ngon trên GitHub Pages.
+  // =========================================================
+  var ROUTE_OF_TAB = { overview: 'overview', forecast: 'forecast', dashboard: 'scorecard' };
+  var TAB_OF_ROUTE = { overview: 'overview', forecast: 'forecast', scorecard: 'dashboard' };
+  var currentTab = 'overview';
+
+  function parseHash() {
+    var h = String(location.hash || '').replace(/^#\/?/, '').replace(/\/+$/, '');
+    var parts = h.split('/').filter(Boolean);
+    return { root: (parts[0] || '').toLowerCase(), sub: (parts[1] || '').toLowerCase() };
+  }
+
+  // replace=true → thay URL tại chỗ, KHÔNG tạo thêm 1 bước trong lịch sử trình duyệt
+  // (dùng cho các chuyển màn hình tự động như login/register, để nút Back không bị kẹt).
+  function setRoute(path, replace) {
+    var target = '#/' + path;
+    if (location.hash === target) return; // đã đúng rồi thì thôi, tránh lặp vô hạn
+    if (replace && history.replaceState) history.replaceState(null, '', target);
+    else location.hash = target;
+  }
+
+  function routeForTab(tab) {
+    if (tab === 'forecast') return (fcView === 'multi') ? 'forecast/multi-year' : 'forecast';
+    return ROUTE_OF_TAB[tab] || 'overview';
+  }
+
+  // Áp URL hiện tại lên giao diện (dùng khi mới vào app & khi bấm Back/Forward)
+  function applyRoute() {
+    if (document.body.className !== 'app-mode') return; // chưa vào app thì chưa điều hướng tab
+    var r = parseHash();
+    var tab = TAB_OF_ROUTE[r.root];
+    if (!tab) { switchTab('overview'); return; }
+    if (currentTab !== tab) switchTab(tab, true);
+    if (tab === 'forecast') {
+      var wantView = (r.sub === 'multi-year') ? 'multi' : 'y1';
+      if (fcView !== wantView) fcSetView(wantView, true);
+    }
+  }
+
+  window.addEventListener('hashchange', applyRoute);
+
+  // =========================================================
+  // UI MODE (boot / login / reg / app)
   // =========================================================
   function setUiMode(mode) {
-    // mode: 'login' or 'app'
+    // mode: 'boot' | 'login' | 'reg' | 'app'
     document.body.className = mode + '-mode';
+    if (mode === 'login') setRoute('login', true);
+    if (mode === 'reg') setRoute('register', true);
   }
 
   function showApp(email) {
     userEmail.textContent = email;
-    // Chỉ chuyển màn hình + về tab Tổng quan ở lần đăng nhập thực sự đầu tiên.
-    // Nếu đây là một lần tải nền (silent refresh khi token hết hạn, hoặc auto-refresh
-    // khi dữ liệu cũ) thì user đang ở tab nào cứ để yên tab đó, đừng nhảy tab.
+    // Chỉ chuyển màn hình ở lần vào app thực sự đầu tiên. Nếu đây là một lần tải
+    // nền (silent refresh khi token hết hạn, hoặc auto-refresh khi dữ liệu cũ)
+    // thì user đang ở tab nào cứ để yên tab đó, đừng nhảy tab.
     if (document.body.className !== 'app-mode') {
-      switchTab('overview');
       setUiMode('app');
+      // Khôi phục đúng tab theo URL — đây là thứ khiến F5 không còn "mất chỗ":
+      // đang ở #/forecast thì F5 xong vẫn ở Forecast, không bị quăng về Overview.
+      var r = parseHash();
+      if (TAB_OF_ROUTE[r.root]) applyRoute();
+      else switchTab('overview');
     }
   }
 
@@ -132,6 +187,24 @@
     lastFetchOverview = 0; lastFetchForecast = 0;
     profile = null; profileKnown = false; currentEmail = '';
     setUiMode('login');
+  }
+
+  // Ngay khi trang vừa nạp: nếu đã có phiên đăng nhập lưu sẵn thì hiện màn
+  // "đang khôi phục phiên" thay vì màn đăng nhập.
+  //
+  // ĐÂY MỚI LÀ NGUYÊN NHÂN THẬT của việc "F5 là ra lại màn đăng nhập": file
+  // index.html mở đầu bằng <body class="login-mode">, nên mỗi lần F5 màn đăng
+  // nhập hiện ra NGAY LẬP TỨC và đứng đó suốt thời gian chờ Apps Script trả dữ
+  // liệu (Apps Script "ngủ" lâu không dùng có thể mất vài giây mới tỉnh) — dù
+  // token vẫn còn hạn và chỉ vài giây sau là vào thẳng app.
+  if (localStorage.getItem('cs_tool_token')) setUiMode('boot');
+
+  function showBootError(msg) {
+    if (document.body.className !== 'boot-mode') return;
+    var box = $('bootErr');
+    if (box) { box.style.display = 'block'; box.textContent = msg; }
+    var btn = $('bootRetry');
+    if (btn) btn.style.display = 'inline-block';
   }
 
   // =========================================================
@@ -233,6 +306,9 @@
   // =========================================================
   function goToForecastDeal(id, name) {
     fcFocusId = id; fcFocusName = name || '';
+    // Bảng deal chi tiết nằm ở sub-tab "Năm 1"; nếu đang mở "ACR nhiều năm" thì
+    // phải chuyển về, không thì bấm vào deal xong chẳng thấy dòng nào cả.
+    if (fcView !== 'y1') fcSetView('y1', true);
     switchTab('forecast');
     var afterReady = function () {
       fcInitFilterMonth(); fcRenderChips(); fcRenderKpis(); fcRenderTable();
@@ -272,6 +348,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
           // (error === 'invalid_token'); các lỗi khác chỉ báo lỗi, giữ nguyên phiên.
           if (data.error !== 'invalid_token') {
             showToast('Không tải được dữ liệu: ' + (data.error || 'lỗi không rõ') + ' — thử bấm "Làm mới".', 'err', 8000);
+            showBootError('Không tải được dữ liệu: ' + (data.error || 'lỗi không rõ'));
             if (!isBackgroundRefresh) resetGoogleButton();
             return;
           }
@@ -314,6 +391,7 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
       })
       .catch(function (err) {
         showToast('Không kết nối được tới dữ liệu: ' + err.message, 'err');
+        showBootError('Không kết nối được tới dữ liệu: ' + err.message);
         if (!isBackgroundRefresh) resetGoogleButton();
       });
   }
@@ -792,13 +870,16 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // =========================================================
   // TABS
   // =========================================================
-  function switchTab(name) {
+  function switchTab(name, fromRoute) {
+    currentTab = name;
     document.querySelectorAll('.tab').forEach(function (t) {
       t.classList.toggle('active', t.getAttribute('data-tab') === name);
     });
     Object.keys(panels).forEach(function (k) {
       panels[k].style.display = k === name ? 'block' : 'none';
     });
+    // Đồng bộ URL — trừ khi chính URL vừa gọi hàm này (fromRoute), tránh lặp.
+    if (!fromRoute) setRoute(routeForTab(name));
     if (name === 'forecast') renderForecast();
     if (name === 'dashboard') renderDashboard();
     if (name === 'overview' && Date.now() - lastFetchOverview > STALE_MS) {
@@ -830,6 +911,9 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   // =========================================================
   logoutBtn.addEventListener('click', logout);
   if (refreshBtn) refreshBtn.addEventListener('click', manualRefresh);
+
+  var bootRetryBtn = $('bootRetry');
+  if (bootRetryBtn) bootRetryBtn.addEventListener('click', function () { location.reload(); });
 
   // NEW — search box Overview + Forecast
   var ovSearchEl = $('ovSearch');
@@ -1770,8 +1854,9 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
   }
 
   // Toggle sub-tab Năm 1 / ACR nhiều năm trong Forecast
-  function fcSetView(v) {
+  function fcSetView(v, fromRoute) {
     fcView = v;
+    if (!fromRoute) setRoute(v === 'multi' ? 'forecast/multi-year' : 'forecast');
     document.querySelectorAll('.fc-view-btn').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === v);
     });
