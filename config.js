@@ -4,7 +4,7 @@ window.CS_TOOL_CONFIG = {
   CLIENT_ID: '621765385511-nn699q39euvcf2slmqbv9jp6oi70kpgb.apps.googleusercontent.com',
 
   // URL Web App sau khi deploy Apps Script (kết thúc bằng /exec)
-  API_URL: 'https://script.google.com/macros/s/AKfycbxV832pLcXGrT3F9rznq-cS3rD-ztJFhTLMXMuRWbDN5WgRnZ68ohlEA7e_eWCtr2qT/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbwlM1umVGDYiH9RZoew_MrQ-fwS0nHZ2o5h9tDGYzhSXBGT2B18SurmamtldJUcvIcC/exec',
 
   // Domain email được phép đăng nhập
   ALLOWED_DOMAIN: 'base.vn',
