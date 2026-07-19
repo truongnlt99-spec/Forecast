@@ -79,21 +79,239 @@
     document.documentElement.setAttribute('data-theme', mode);
     var ico = $('themeIco');
     if (ico) ico.innerHTML = mode === 'dark' ? MOON : SUN;
+    var lb = $('accThemeLb');
+    if (lb) lb.textContent = mode === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', mode === 'dark' ? '#0B0D17' : '#EEF1FB');
     try { localStorage.setItem(LS_THEME, mode); } catch (e) {}
   }
-  var themeBtn = $('themeBtn');
+  var themeBtn = $('accTheme');
   if (themeBtn) {
     themeBtn.addEventListener('click', function () {
       var cur = document.documentElement.getAttribute('data-theme') || 'dark';
       setTheme(cur === 'dark' ? 'light' : 'dark');
+      closeMenu();
     });
   }
   try {
     var saved = localStorage.getItem(LS_THEME);
     setTheme(saved === 'light' ? 'light' : 'dark');
   } catch (e) { setTheme('dark'); }
+
+  /* -------------------------------------------------------
+     3b. MENU TÀI KHOẢN — bấm avatar góc phải
+     ------------------------------------------------------- */
+  var strip = $('profileStrip');
+  var accMenu = $('accMenu');
+
+  function closeMenu() {
+    if (!accMenu) return;
+    accMenu.classList.remove('open');
+    if (strip) strip.setAttribute('aria-expanded', 'false');
+  }
+  if (strip && accMenu) {
+    strip.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = accMenu.classList.toggle('open');
+      strip.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+      if (!accMenu.contains(e.target)) closeMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+  }
+
+  /* -------------------------------------------------------
+     3c. MODAL CẬP NHẬT THÔNG TIN
+     Lưu qua đúng endpoint action:'register' mà app.js dùng ở màn
+     đăng ký lần đầu (cùng payload) — backend ghi vào sheet
+     "Danh sách CS". Ảnh đại diện lưu localStorage theo email.
+     ------------------------------------------------------- */
+  // Danh sách level + khung lương — CHÉP TỪ bảng LEVELS trong app.js
+  // (buildRegForm chỉ chạy ở màn đăng ký lần đầu nên không mượn lại được).
+  // Nếu policy đổi khung lương thì sửa cả 2 nơi.
+  var PM_LEVELS = {
+    'CS_A level 1': { title: 'Solution Associate',      lo: 9000000,  hi: 9000000 },
+    'CS_A level 2': { title: 'Solution Associate',      lo: 11000000, hi: 11000000 },
+    'CS level 1':   { title: 'Solution Representative', lo: 10000000, hi: 13000000 },
+    'CS level 2':   { title: 'Solution Representative', lo: 11000000, hi: 14000000 },
+    'CS level 3':   { title: 'Solution Representative', lo: 12000000, hi: 15000000 },
+    'CS level 4':   { title: 'Solution Representative', lo: 13000000, hi: 17000000 },
+    'CS level 5':   { title: 'Solution Specialist',     lo: 15000000, hi: 20000000 },
+    'CS level 6':   { title: 'Solution Specialist',     lo: 20000000, hi: 25000000 },
+    'CS level 7':   { title: 'Solution Specialist',     lo: 25000000, hi: 35000000 },
+  };
+  var PM_ORDER = ['CS_A level 1','CS_A level 2','CS level 1','CS level 2','CS level 3','CS level 4','CS level 5','CS level 6','CS level 7'];
+  var fmtVnd = function (n) { return (n == null ? '—' : Number(n).toLocaleString('vi-VN') + ' đ'); };
+
+  var pmModal = $('pmModal');
+  var pmAvatarData = null;   // dataURL đang chọn trong modal (null = chữ cái tên)
+
+  function currentEmailFromUI() {
+    // #psSub dạng "Solution Representative · truong.nguyen@base.vn"
+    var t = ($('psSub') && $('psSub').textContent) || '';
+    var m = t.match(/[\w.+-]+@[\w.-]+/);
+    if (m) return m[0];
+    return ($('userEmail') && $('userEmail').textContent) || '';
+  }
+  var avatarKey = function (email) { return 'cs_tool_avatar_' + (email || 'unknown'); };
+
+  function applyAvatarEverywhere() {
+    var email = currentEmailFromUI();
+    var data = null;
+    try { data = localStorage.getItem(avatarKey(email)); } catch (e) {}
+    ['psAvatar', 'dbAvatar'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      if (data) { el.style.backgroundImage = 'url(' + data + ')'; el.classList.add('has-img'); }
+      else { el.style.backgroundImage = ''; el.classList.remove('has-img'); }
+    });
+  }
+
+  function pmBuildLevels() {
+    var sel = $('pmLevel');
+    if (!sel || sel.options.length > 1) return;
+    PM_ORDER.forEach(function (lv) {
+      var o = document.createElement('option');
+      o.value = lv;
+      o.textContent = lv + ' — ' + PM_LEVELS[lv].title;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', pmOnLevel);
+  }
+  function pmOnLevel() {
+    var lv = $('pmLevel').value, sal = $('pmSalary'), hint = $('pmSalaryHint'), lvHint = $('pmLevelHint');
+    if (!lv) { sal.value = ''; sal.disabled = true; sal.placeholder = 'Chọn level trước'; hint.textContent = ''; lvHint.textContent = ''; return; }
+    var d = PM_LEVELS[lv];
+    lvHint.textContent = d.title;
+    if (d.lo === d.hi) {
+      sal.value = d.lo; sal.disabled = true;
+      hint.textContent = 'Mức cố định theo policy: ' + fmtVnd(d.lo);
+    } else {
+      sal.disabled = false; sal.placeholder = '';
+      hint.textContent = 'Khung theo policy: ' + fmtVnd(d.lo) + ' – ' + fmtVnd(d.hi);
+    }
+  }
+
+  function pmOpen() {
+    closeMenu();
+    if (!pmModal) return;
+    pmBuildLevels();
+    // prefill từ những gì app.js đã hiện trên header
+    $('pmName').value = (($('psName') && $('psName').textContent) || '').replace(/^—$/, '');
+    var lvChip = document.querySelector('.ps-chip.lvl');
+    var lv = lvChip ? lvChip.textContent.trim() : '';
+    $('pmLevel').value = PM_LEVELS[lv] ? lv : '';
+    pmOnLevel();
+    $('pmErr').textContent = '';
+    // avatar hiện tại
+    var email = currentEmailFromUI();
+    try { pmAvatarData = localStorage.getItem(avatarKey(email)); } catch (e) { pmAvatarData = null; }
+    pmPreview();
+    pmModal.classList.add('open');
+  }
+  function pmClose() { if (pmModal) pmModal.classList.remove('open'); }
+
+  function pmPreview() {
+    var el = $('pmAvatarPreview');
+    if (!el) return;
+    var name = $('pmName').value.trim() || 'CS';
+    var parts = name.split(/\s+/);
+    el.textContent = (parts.length > 1 ? parts[parts.length - 2][0] + parts[parts.length - 1][0] : name.slice(0, 2)).toUpperCase();
+    if (pmAvatarData) { el.style.backgroundImage = 'url(' + pmAvatarData + ')'; el.classList.add('has-img'); }
+    else { el.style.backgroundImage = ''; el.classList.remove('has-img'); }
+  }
+
+  // chọn ảnh → thu nhỏ về 128px vuông rồi lưu dataURL cho nhẹ localStorage
+  var pmFile = $('pmAvatarFile');
+  if (pmFile) pmFile.addEventListener('change', function () {
+    var f = pmFile.files && pmFile.files[0];
+    if (!f) return;
+    var img = new Image();
+    img.onload = function () {
+      var S = 128, c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      var ctx = c.getContext('2d');
+      var side = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
+      pmAvatarData = c.toDataURL('image/jpeg', .85);
+      pmPreview();
+    };
+    img.onerror = function () { $('pmErr').textContent = 'Không đọc được file ảnh này.'; };
+    img.src = URL.createObjectURL(f);
+    pmFile.value = '';
+  });
+  var pmRemove = $('pmAvatarRemove');
+  if (pmRemove) pmRemove.addEventListener('click', function () { pmAvatarData = null; pmPreview(); });
+  var pmNameEl = $('pmName');
+  if (pmNameEl) pmNameEl.addEventListener('input', pmPreview);
+
+  function pmSave() {
+    var hoTen = $('pmName').value.trim();
+    var level = $('pmLevel').value;
+    var salary = parseInt(String($('pmSalary').value).replace(/[^\d]/g, ''), 10);
+    var err = $('pmErr');
+    if (!hoTen) { err.textContent = 'Vui lòng nhập Họ và tên.'; return; }
+    if (!level) { err.textContent = 'Vui lòng chọn Level.'; return; }
+    var d = PM_LEVELS[level];
+    if (isNaN(salary) || salary < d.lo || salary > d.hi) {
+      err.textContent = 'Salary phải nằm trong khung ' + fmtVnd(d.lo) + ' – ' + fmtVnd(d.hi) + '.';
+      return;
+    }
+    err.textContent = '';
+    var btn = $('pmSubmit'), sp = $('pmSpinner'), tx = $('pmBtnText');
+    btn.setAttribute('disabled', ''); sp.classList.remove('hidden'); tx.textContent = 'Đang lưu…';
+
+    var email = currentEmailFromUI();
+    // avatar: lưu ngay trên máy (không phụ thuộc backend)
+    try {
+      if (pmAvatarData) localStorage.setItem(avatarKey(email), pmAvatarData);
+      else localStorage.removeItem(avatarKey(email));
+    } catch (e) {}
+
+    var CFG = window.CS_TOOL_CONFIG || {};
+    var token = null;
+    try { token = localStorage.getItem('cs_tool_token'); } catch (e) {}
+
+    fetch(CFG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      // cùng action & payload với màn đăng ký lần đầu của app.js —
+      // backend ghi đè dòng của user trong sheet "Danh sách CS"
+      body: JSON.stringify({ token: token, action: 'register', hoTen: hoTen, level: level, salary: salary }),
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (t) { return JSON.parse(t); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.error || 'lỗi không rõ');
+        tx.textContent = 'Đã lưu ✓';
+        // nạp lại để app.js đọc profile mới từ đầu — mọi công thức
+        // (mốc KPI, %com theo level) chắc chắn dùng đúng thông tin vừa sửa
+        setTimeout(function () { location.reload(); }, 700);
+      })
+      .catch(function (e2) {
+        btn.removeAttribute('disabled'); sp.classList.add('hidden'); tx.textContent = 'Lưu thay đổi';
+        err.textContent = 'Lưu không thành công: ' + e2.message;
+      });
+  }
+
+  var accEdit = $('accEdit');
+  if (accEdit) accEdit.addEventListener('click', pmOpen);
+  var pmCloseBtn = $('pmClose');
+  if (pmCloseBtn) pmCloseBtn.addEventListener('click', pmClose);
+  if (pmModal) pmModal.addEventListener('click', function (e) { if (e.target === pmModal) pmClose(); });
+  var pmSubmitBtn = $('pmSubmit');
+  if (pmSubmitBtn) pmSubmitBtn.addEventListener('click', pmSave);
+
+  // Avatar tự hiện lại khi app.js điền xong hồ sơ (psSub có email)
+  var psSubEl = $('psSub');
+  if (psSubEl) {
+    new MutationObserver(applyAvatarEverywhere)
+      .observe(psSubEl, { childList: true, characterData: true, subtree: true });
+    applyAvatarEverywhere();
+  }
 
   /* -------------------------------------------------------
      4. TIÊU ĐỀ HEADER THEO TAB ĐANG MỞ

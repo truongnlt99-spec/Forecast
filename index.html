@@ -30,7 +30,7 @@
         <div class="name">Customer Success<small>Performance Console</small></div>
       </div>
       <div class="boot-spinner"></div>
-      <p class="boot-text">Đang khôi phục phiên đăng nhập…</p>
+      <p class="boot-text">Đang đăng nhập…</p>
       <div class="boot-err" id="bootErr" style="display:none;"></div>
       <button class="gbtn-retry" id="bootRetry" style="display:none;">↻ Thử lại</button>
     </div>
@@ -230,19 +230,29 @@
           <input type="text" id="fcSearch" class="search-input" placeholder="Tìm theo tên deal…" style="display:none;">
         </div>
 
-        <div class="user-box">
-          <button class="icon-btn" id="themeBtn" title="Đổi sáng / tối" aria-label="Đổi giao diện">
-            <svg id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
-          </button>
-
-          <!-- Hồ sơ CS: app.js điền qua các id psAvatar / psName / psSub / psChips -->
-          <div class="profile-strip" id="profileStrip" style="display:none;">
+        <div class="user-box" id="userBox">
+          <!-- Hồ sơ CS: app.js điền qua các id psAvatar / psName / psSub / psChips.
+               Bấm vào mở menu tài khoản (ui.js). -->
+          <button class="profile-strip" id="profileStrip" style="display:none;" aria-haspopup="menu" aria-expanded="false">
             <div class="ps-chips" id="psChips"></div>
             <div class="ps-info">
               <div class="ps-name" id="psName">—</div>
               <div class="ps-sub" id="psSub">—</div>
             </div>
             <div class="ps-avatar" id="psAvatar">CS</div>
+            <svg class="ps-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+
+          <!-- Menu tài khoản -->
+          <div class="acc-menu" id="accMenu" role="menu">
+            <button class="acc-item" id="accEdit" role="menuitem">
+              <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+              Cập nhật thông tin
+            </button>
+            <button class="acc-item" id="accTheme" role="menuitem">
+              <svg id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+              <span id="accThemeLb">Chế độ sáng</span>
+            </button>
           </div>
 
           <span id="userEmail"></span>
@@ -544,6 +554,52 @@
         </section>
 
       </main>
+    </div>
+  </div>
+
+  <!-- =====================================================
+       MODAL: CẬP NHẬT THÔNG TIN (ui.js điều khiển)
+       ===================================================== -->
+  <div class="modal-overlay" id="pmModal">
+    <div class="modal-panel pm-panel">
+      <div class="modal-head">
+        <h3>Cập nhật thông tin</h3>
+        <button class="modal-x" id="pmClose" aria-label="Đóng">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="pm-avatar-row">
+          <div class="pm-avatar" id="pmAvatarPreview">CS</div>
+          <div class="pm-avatar-actions">
+            <label class="btn pm-upload-btn" for="pmAvatarFile">Đổi ảnh đại diện</label>
+            <input type="file" id="pmAvatarFile" accept="image/*" hidden>
+            <button class="btn" id="pmAvatarRemove" type="button">Dùng chữ cái tên</button>
+            <div class="reg-hint">Ảnh lưu theo tài khoản trên máy này, tự hiện lại mỗi lần đăng nhập.</div>
+          </div>
+        </div>
+
+        <div class="reg-form">
+          <div class="reg-field">
+            <label for="pmName">Họ và tên</label>
+            <input type="text" id="pmName" placeholder="VD: Nguyễn Lê Thanh Trường" autocomplete="name">
+          </div>
+          <div class="reg-field">
+            <label for="pmLevel">Level</label>
+            <select id="pmLevel"><option value="">— Chọn level —</option></select>
+            <div class="reg-hint" id="pmLevelHint"></div>
+          </div>
+          <div class="reg-field">
+            <label for="pmSalary">Salary (VNĐ/tháng)</label>
+            <input type="number" id="pmSalary" placeholder="Chọn level trước" disabled>
+            <div class="reg-hint" id="pmSalaryHint"></div>
+          </div>
+
+          <button class="gbtn pm-submit" id="pmSubmit">
+            <svg class="spinner hidden" id="pmSpinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle></svg>
+            <span id="pmBtnText">Lưu thay đổi</span>
+          </button>
+          <div class="reg-err" id="pmErr"></div>
+        </div>
+      </div>
     </div>
   </div>
 
