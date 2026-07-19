@@ -1,0 +1,211 @@
+/* =========================================================
+   ui.js — LỚP GIAO DIỆN (UI/UX v2)
+   ---------------------------------------------------------
+   File này CHỈ lo phần nhìn. Không đụng gì tới logic nghiệp
+   vụ, không đọc/ghi sheet, không tính CHS/commission.
+   app.js giữ nguyên 100%.
+
+   Việc nó làm:
+   1. Thu gọn / mở rộng sidebar (nhớ lựa chọn trong localStorage)
+   2. Mở sidebar dạng drawer trên mobile
+   3. Đổi sáng / tối (nhớ lựa chọn)
+   4. Đổi tiêu đề trên header theo tab đang mở
+   5. Đổ chữ cái đầu của tên vào avatar góc phải
+   6. Dựng banner "Tổng thu nhập ước tính" ở đầu tab Scorecard
+      bằng cách ĐỌC LẠI các dòng tổng mà app.js đã render ở
+      #comTfoot — không tính toán lại, nên không lệch số.
+   ========================================================= */
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var LS_SIDE = 'cs_tool_sidebar';
+  var LS_THEME = 'cs_tool_theme';
+
+  /* -------------------------------------------------------
+     1. THU GỌN / MỞ RỘNG SIDEBAR
+     ------------------------------------------------------- */
+  var wrapper = $('appWrapper');
+  var toggleBtn = $('sideToggle');
+
+  function setCollapsed(on) {
+    if (!wrapper || !toggleBtn) return;
+    wrapper.classList.toggle('collapsed', on);
+    var txt = on ? 'Mở rộng menu' : 'Thu gọn menu';
+    toggleBtn.setAttribute('aria-label', txt);
+    toggleBtn.setAttribute('title', txt);
+    var lb = toggleBtn.querySelector('.scb-label');
+    if (lb) lb.textContent = txt;
+    try { localStorage.setItem(LS_SIDE, on ? 'collapsed' : 'expanded'); } catch (e) {}
+  }
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      setCollapsed(!wrapper.classList.contains('collapsed'));
+    });
+  }
+  try {
+    if (localStorage.getItem(LS_SIDE) === 'collapsed') setCollapsed(true);
+  } catch (e) {}
+
+  /* -------------------------------------------------------
+     2. SIDEBAR DẠNG DRAWER TRÊN MOBILE
+     ------------------------------------------------------- */
+  var side = $('side');
+  var menuBtn = $('menuBtn');
+  if (menuBtn && side) {
+    menuBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      side.classList.toggle('on');
+    });
+    // bấm ra ngoài hoặc chọn 1 mục thì đóng lại
+    document.addEventListener('click', function (e) {
+      if (!side.classList.contains('on')) return;
+      if (side.contains(e.target) && !e.target.closest('.tab, .nav-item')) return;
+      side.classList.remove('on');
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') side.classList.remove('on');
+    });
+  }
+
+  /* -------------------------------------------------------
+     3. SÁNG / TỐI
+     ------------------------------------------------------- */
+  var SUN = '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.2 4.2l1.5 1.5M18.3 18.3l1.5 1.5M2 12h2M20 12h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/>';
+  var MOON = '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>';
+
+  function setTheme(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    var ico = $('themeIco');
+    if (ico) ico.innerHTML = mode === 'dark' ? MOON : SUN;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', mode === 'dark' ? '#0B0D17' : '#EEF1FB');
+    try { localStorage.setItem(LS_THEME, mode); } catch (e) {}
+  }
+  var themeBtn = $('themeBtn');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
+      var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+  }
+  try {
+    var saved = localStorage.getItem(LS_THEME);
+    setTheme(saved === 'light' ? 'light' : 'dark');
+  } catch (e) { setTheme('dark'); }
+
+  /* -------------------------------------------------------
+     4. TIÊU ĐỀ HEADER THEO TAB ĐANG MỞ
+     app.js tự gắn/gỡ class .active trên .tab, nên ở đây chỉ
+     cần quan sát thay đổi đó rồi đổi chữ — không can thiệp
+     vào việc chuyển tab.
+     ------------------------------------------------------- */
+  var TITLES = {
+    overview:  ['Tổng quan', 'Sức khỏe portfolio'],
+    forecast:  ['Nhập & dự phóng', 'Mỗi ô nhập xong nhớ bấm Lưu'],
+    dashboard: ['Thu nhập & xếp loại', 'Performance · commission tháng']
+  };
+  function syncTitle() {
+    var active = document.querySelector('.tab.active');
+    var key = active ? active.getAttribute('data-tab') : 'overview';
+    var t = TITLES[key] || TITLES.overview;
+    var ttl = $('pageTitle'), sub = $('pageSub');
+    if (ttl) ttl.textContent = t[0];
+    if (sub) sub.textContent = t[1];
+  }
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () { setTimeout(syncTitle, 0); });
+  });
+  window.addEventListener('hashchange', function () { setTimeout(syncTitle, 0); });
+  syncTitle();
+
+  /* -------------------------------------------------------
+     5. AVATAR GÓC PHẢI — lấy chữ cái đầu từ ô tên mà app.js
+        đã điền sẵn (#psName), theo dõi bằng MutationObserver.
+     ------------------------------------------------------- */
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length || parts[0] === '—') return 'CS';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  var psName = $('psName'), topAvatar = $('topAvatar');
+  if (psName && topAvatar) {
+    var syncAvatar = function () { topAvatar.textContent = initials(psName.textContent); };
+    new MutationObserver(syncAvatar).observe(psName, { childList: true, characterData: true, subtree: true });
+    syncAvatar();
+  }
+
+  /* -------------------------------------------------------
+     6. BANNER TỔNG THU NHẬP (tab Scorecard)
+     app.js render các dòng tổng vào #comTfoot:
+        … TỔNG COMMISSION THÁNG mm/yyyy   |  x đ
+        Lương cứng (level)                |  y đ
+        THU NHẬP ƯỚC TÍNH                 |  z đ   (.com-grand)
+     Ở đây chỉ ĐỌC LẠI 3 dòng đó rồi hiển thị to lên đầu trang.
+     Không tính lại → không bao giờ lệch với bảng bên dưới.
+     ------------------------------------------------------- */
+  var comTfoot = $('comTfoot');
+  var hero = $('incomeHero');
+
+  function textOf(tr) {
+    var tds = tr.querySelectorAll('td');
+    return {
+      label: (tds[0] ? tds[0].textContent : '').trim(),
+      value: (tds[tds.length - 1] ? tds[tds.length - 1].textContent : '').trim()
+    };
+  }
+
+  function syncHero() {
+    if (!comTfoot || !hero) return;
+    var rows = comTfoot.querySelectorAll('tr');
+    if (!rows.length) { hero.style.display = 'none'; return; }
+
+    var total = null, salary = null, com = null, month = '';
+
+    rows.forEach(function (tr) {
+      var r = textOf(tr);
+      var lb = r.label.toUpperCase();
+      if (lb.indexOf('THU NHẬP ƯỚC TÍNH') !== -1) total = r.value;
+      else if (lb.indexOf('LƯƠNG CỨNG') !== -1) salary = r.value;
+      else if (lb.indexOf('TỔNG COMMISSION') !== -1) {
+        com = r.value;
+        var m = r.label.match(/(\d{1,2}\/\d{4})/);
+        if (m) month = m[1];
+      }
+    });
+
+    // Chưa đăng ký lương thì app.js không render 2 dòng cuối →
+    // vẫn hiện banner nhưng lấy commission làm số chính.
+    if (!total && !com) { hero.style.display = 'none'; return; }
+
+    hero.style.display = 'grid';
+    $('ihTotal').textContent = total || com || '—';
+    $('ihSalary').textContent = salary || 'Chưa đăng ký';
+    $('ihCom').textContent = com || '—';
+    $('ihMonth').textContent = month ? 'Tháng ' + month : '';
+  }
+
+  if (comTfoot) {
+    new MutationObserver(syncHero).observe(comTfoot, { childList: true, subtree: true });
+    syncHero();
+  }
+
+  /* -------------------------------------------------------
+     7. ĐẾM DEAL CÒN THIẾU SỐ — hiện badge nhỏ cạnh mục
+        "Nhập & dự phóng". Đọc từ chip cảnh báo mà app.js đã
+        render trong #fcChips (chip .warn), không tự tính.
+     ------------------------------------------------------- */
+  var fcChips = $('fcChips'), navMissing = $('navMissing');
+  function syncMissing() {
+    if (!fcChips || !navMissing) return;
+    var warn = fcChips.querySelector('.fc-chip.warn');
+    if (!warn) { navMissing.textContent = ''; return; }
+    var m = warn.textContent.match(/(\d+)/);
+    navMissing.textContent = (m && m[1] !== '0') ? m[1] : '';
+  }
+  if (fcChips) {
+    new MutationObserver(syncMissing).observe(fcChips, { childList: true, subtree: true });
+  }
+})();

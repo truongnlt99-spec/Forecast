@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#FFFFFF">
+<meta name="theme-color" content="#0B0D17">
 <title>Customer Success — Personal Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -21,11 +21,7 @@
   <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
   <!-- =====================================================
-       BOOT SCREEN — hiện khi đã có phiên đăng nhập lưu sẵn và đang
-       chờ dữ liệu về. Trước đây không có màn này nên mỗi lần F5 là
-       màn ĐĂNG NHẬP hiện ra ngay rồi đứng đó suốt lúc chờ Apps Script
-       (có khi vài giây) — nhìn y như bị đăng xuất, dù thật ra vẫn đang
-       đăng nhập bình thường.
+       BOOT SCREEN
        ===================================================== -->
   <section class="boot-screen" role="status" aria-live="polite">
     <div class="login-card boot-card">
@@ -53,7 +49,7 @@
       </div>
 
       <h1 class="login-h1">Welcome back,<br><span class="accent">Customer Success</span></h1>
-      <p class="login-sub">Đăng nhập để mở bảng theo dõi deal, sức khỏe khách hàng & dự phóng commission của bạn.</p>
+      <p class="login-sub">Đăng nhập để mở bảng theo dõi deal, sức khỏe khách hàng &amp; dự phóng commission của bạn.</p>
 
       <button class="gbtn" id="gbtn" onclick="signInWithGoogle()">
         <svg class="glogo" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" id="glogo">
@@ -66,11 +62,7 @@
         <span id="gtext">Continue with Google</span>
       </button>
 
-      <!-- Fallback: nút Google THẬT (renderButton chính chủ), ẩn mặc định.
-           Hiện ra khi One Tap/FedCM thất bại (bị trình duyệt chặn, bị tắt
-           third-party sign-in, timeout...) — vì nút thật này mở popup OAuth
-           chuẩn, không phụ thuộc vào cơ chế "silent prompt" đang bị Google
-           khai tử dần dưới FedCM, nên gần như luôn bấm được. -->
+      <!-- Fallback: nút Google THẬT (renderButton chính chủ), ẩn mặc định. -->
       <div class="gbtn-fallback hidden" id="gbtnFallback">
         <p class="gbtn-fallback-note">One Tap không mở được (trình duyệt/tài khoản đang chặn). Dùng nút Google chính thức bên dưới:</p>
         <div id="gRealButton"></div>
@@ -137,326 +129,411 @@
   <!-- =====================================================
        APP SCREEN
        ===================================================== -->
-  <div class="app-wrapper">
-    <header class="topbar">
-      <div class="topbar-brand">
-        <span class="topbar-mark"></span>
-        <h1>CS Personal Tool</h1>
+  <div class="app-wrapper" id="appWrapper">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="side" id="side">
+      <div class="brand">
+        <div class="brand-mark"><span>CS</span></div>
+        <div class="brand-text">CS Personal Tool<small>Performance Console</small></div>
       </div>
 
+      <div class="nav-cap">Theo dõi</div>
+
+      <!-- QUAN TRỌNG: .tab[data-tab] là hook app.js dùng để chuyển màn.
+           Giữ nguyên id tabNav + class tab + data-tab. -->
       <nav class="tabs" id="tabNav">
-        <button class="tab active" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="forecast">Forecast</button>
-        <button class="tab" data-tab="dashboard">Scorecard</button>
+        <button class="tab active" data-tab="overview">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+          <span class="nav-label">Tổng quan</span>
+          <span class="nav-fly">Tổng quan</span>
+        </button>
+
+        <div class="nav-group" id="navForecastGroup">
+          <button class="tab" data-tab="forecast">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 3 3 5-7"/></svg>
+            <span class="nav-label">Nhập &amp; dự phóng</span>
+            <span class="pill-count" id="navMissing"></span>
+            <span class="nav-fly">Nhập &amp; dự phóng</span>
+          </button>
+
+          <!-- .fc-view-btn là hook có sẵn của app.js (fcSetView) -->
+          <div class="nav-sub"><div><div class="nav-sub-inner">
+            <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
+            <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
+          </div></div></div>
+
+          <div class="nav-group-fly">
+            <div class="nav-group-fly-title">Nhập &amp; dự phóng</div>
+            <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
+            <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
+          </div>
+        </div>
+
+        <button class="tab" data-tab="dashboard">
+          <svg viewBox="0 0 24 24"><path d="M12 3v18M5 8v13M19 12v9"/><circle cx="12" cy="3" r="1.4"/></svg>
+          <span class="nav-label">Thu nhập &amp; xếp loại</span>
+          <span class="nav-fly">Thu nhập &amp; xếp loại</span>
+        </button>
       </nav>
 
-      <div class="user-box">
-        <button class="btn" id="playbookBtn" title="Hướng dẫn sử dụng tool" aria-label="Playbook"><span class="btn-ico">📘</span><span class="btn-txt">Playbook</span></button>
-        <button class="btn" id="changelogBtn" title="Lịch sử cập nhật" aria-label="Changelog"><span class="btn-ico">🕘</span><span class="btn-txt">Changelog</span></button>
-        <button class="btn" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet" aria-label="Làm mới"><span class="btn-ico">↻</span><span class="btn-txt">Làm mới</span></button>
-        <span id="userEmail"></span>
-        <button class="btn" id="logoutBtn" title="Đăng xuất" aria-label="Đăng xuất"><span class="btn-ico">⏻</span><span class="btn-txt">Đăng xuất</span></button>
+      <div class="nav-cap">Hệ thống</div>
+
+      <button class="nav-item" id="playbookBtn" title="Hướng dẫn sử dụng tool" aria-label="Playbook">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 012-2h13v18H6.5A2.5 2.5 0 004 19.5zM4 19.5A2.5 2.5 0 016.5 17H19"/></svg>
+        <span class="nav-label">Playbook</span>
+        <span class="nav-fly">Playbook</span>
+      </button>
+      <button class="nav-item" id="changelogBtn" title="Lịch sử cập nhật" aria-label="Changelog">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span class="nav-label">Changelog</span>
+        <span class="nav-fly">Changelog</span>
+      </button>
+      <button class="nav-item" id="refreshBtn" title="Tải lại dữ liệu mới nhất từ sheet" aria-label="Làm mới">
+        <svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 006.3 5.7L3 9M4 13a8 8 0 0013.7 5.3L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/></svg>
+        <span class="nav-label">Làm mới dữ liệu</span>
+        <span class="nav-fly">Làm mới dữ liệu</span>
+      </button>
+      <button class="nav-item" id="logoutBtn" title="Đăng xuất" aria-label="Đăng xuất">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        <span class="nav-label">Đăng xuất</span>
+        <span class="nav-fly">Đăng xuất</span>
+      </button>
+
+      <div class="side-spacer"></div>
+
+      <div class="side-collapse-wrap">
+        <button class="side-collapse-btn" id="sideToggle" aria-label="Thu gọn menu" title="Thu gọn menu">
+          <svg viewBox="0 0 24 24"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+          <span class="scb-label">Thu gọn menu</span>
+        </button>
       </div>
-    </header>
+    </aside>
 
-    <main class="app-content">
+    <!-- ============ MAIN ============ -->
+    <div class="main-col">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Mở menu">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
 
-      <!-- TAB: TỔNG QUAN -->
-      <section class="tab-panel" id="panel-overview">
-
-        <div class="profile-strip" id="profileStrip" style="display:none;">
-          <div class="ps-avatar" id="psAvatar">CS</div>
-          <div class="ps-info">
-            <div class="ps-name" id="psName">—</div>
-            <div class="ps-sub" id="psSub">—</div>
-          </div>
-          <div class="ps-chips" id="psChips"></div>
+        <div class="topbar-brand">
+          <h1 id="pageTitle">Tổng quan</h1>
+          <span class="topbar-mark" id="pageSub">Sức khỏe portfolio</span>
         </div>
 
-        <div class="filter-bar">
-          <div class="filter-field">
-            <label for="ovPeriod">Thời gian</label>
-            <select id="ovPeriod">
-              <option value="month">Tháng này</option>
-              <option value="quarter">Quý này</option>
-              <option value="year">Năm nay</option>
-              <option value="all">Tất cả</option>
-              <option value="custom">Khoảng thời gian…</option>
-            </select>
+        <div class="user-box">
+          <button class="icon-btn" id="themeBtn" title="Đổi sáng / tối" aria-label="Đổi giao diện">
+            <svg id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+          </button>
+          <span id="userEmail"></span>
+          <div class="avatar-top" id="topAvatar">CS</div>
+        </div>
+      </header>
+
+      <main class="app-content">
+
+        <!-- TAB: TỔNG QUAN -->
+        <section class="tab-panel" id="panel-overview">
+
+          <div class="profile-strip" id="profileStrip" style="display:none;">
+            <div class="ps-avatar" id="psAvatar">CS</div>
+            <div class="ps-info">
+              <div class="ps-name" id="psName">—</div>
+              <div class="ps-sub" id="psSub">—</div>
+            </div>
+            <div class="ps-chips" id="psChips"></div>
           </div>
 
-          <div class="filter-field">
-            <label for="ovContract">Loại hợp đồng</label>
-            <select id="ovContract"><option value="">Tất cả loại HĐ</option></select>
-          </div>
-
-          <div class="filter-field">
-            <label for="ovSolution">Bộ giải pháp</label>
-            <select id="ovSolution"><option value="">Tất cả bộ giải pháp</option></select>
-          </div>
-
-          <div class="filter-field">
-            <label for="ovSearch">Tìm kiếm</label>
-            <input type="text" id="ovSearch" class="search-input" placeholder="🔍 tên công ty, Sys ID…">
-          </div>
-
-          <div class="filter-count" id="filterCount"></div>
-
-          <!-- Chỉ hiện khi chọn "Khoảng thời gian…" -->
-          <div class="ov-custom-range" id="ovCustomRange" style="display:none;">
+          <div class="filter-bar">
             <div class="filter-field">
-              <label for="dateFrom">Nhận deal từ</label>
-              <input type="date" id="dateFrom">
+              <label for="ovPeriod">Thời gian</label>
+              <select id="ovPeriod">
+                <option value="month">Tháng này</option>
+                <option value="quarter">Quý này</option>
+                <option value="year">Năm nay</option>
+                <option value="all">Tất cả</option>
+                <option value="custom">Khoảng thời gian…</option>
+              </select>
             </div>
+
             <div class="filter-field">
-              <label for="dateTo">Đến</label>
-              <input type="date" id="dateTo">
+              <label for="ovContract">Loại hợp đồng</label>
+              <select id="ovContract"><option value="">Tất cả loại HĐ</option></select>
+            </div>
+
+            <div class="filter-field">
+              <label for="ovSolution">Bộ giải pháp</label>
+              <select id="ovSolution"><option value="">Tất cả bộ giải pháp</option></select>
+            </div>
+
+            <div class="filter-field">
+              <label for="ovSearch">Tìm kiếm</label>
+              <input type="text" id="ovSearch" class="search-input" placeholder="🔍 tên công ty, Sys ID…">
+            </div>
+
+            <div class="filter-count" id="filterCount"></div>
+
+            <div class="ov-custom-range" id="ovCustomRange" style="display:none;">
+              <div class="filter-field">
+                <label for="dateFrom">Nhận deal từ</label>
+                <input type="date" id="dateFrom">
+              </div>
+              <div class="filter-field">
+                <label for="dateTo">Đến</label>
+                <input type="date" id="dateTo">
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="health-strip" id="healthStrip"></div>
+          <div class="health-strip" id="healthStrip"></div>
 
-        <div class="kpi-row kpi-row-4">
-          <div class="kpi-card">
-            <div class="kpi-label">Số deal nhận</div>
-            <div class="kpi-value" id="kpiDeals">—</div>
-            <div class="kpi-sub" id="kpiDealsSub"></div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Tổng revenue đang thực hiện</div>
-            <div class="kpi-value" id="kpiRevenue">—</div>
-            <div class="kpi-sub" id="kpiRevenueSub"></div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">CHS_CS trung bình</div>
-            <div class="kpi-value" id="kpiChs">—</div>
-            <div class="kpi-sub" id="kpiChsSub"></div>
-          </div>
-          <div class="kpi-card kpi-health">
-            <div class="kpi-label">Sức khỏe deal</div>
-            <div class="health-counts" id="healthCounts"></div>
-          </div>
-        </div>
-
-        <div class="chart-row">
-          <div class="chart-card">
-            <div class="chart-title">Theo bộ giải pháp <span class="chart-note">(theo ARR)</span></div>
-            <div class="donut-wrap" id="donutSolution"></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">Theo loại hợp đồng <span class="chart-note">(theo ARR)</span></div>
-            <div class="donut-wrap" id="donutContract"></div>
-          </div>
-        </div>
-
-        <div class="table-card">
-          <div class="table-head">
-            <div class="chart-title">Danh sách deal</div>
-            <div class="table-hint">Bấm vào một dòng để xem chi tiết</div>
-          </div>
-          <div class="table-scroll">
-            <table class="deal-table">
-              <thead>
-                <tr>
-                  <th>Khách hàng</th>
-                  <th>Vai trò</th>
-                  <th class="th-sort" id="sortDate">Ngày nhận ▾</th>
-                  <th class="num">ARR</th>
-                  <th>Trạng thái Go-live</th>
-                  <th class="num">CHS_CS</th>
-                </tr>
-              </thead>
-              <tbody id="dealTbody"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="tableEmpty" style="display:none;">Không có deal nào nhận trong khoảng thời gian này.<br>Thử nới rộng bộ lọc hoặc bấm "Tất cả".</div>
-        </div>
-
-      </section>
-
-      <!-- TAB: FORECAST -->
-      <section class="tab-panel" id="panel-forecast" style="display:none;">
-
-        <div class="fc-bar fc-bar-slim">
-          <div class="fc-bar-actions">
-            <span class="fc-flag" id="fcFlag"></span>
-            <button class="btn fc-save" id="fcSaveBtn">Lưu &amp; đẩy về sheet</button>
-          </div>
-        </div>
-
-        <div class="fc-kpis">
-          <div class="kpi-card">
-            <div class="kpi-label">CHS_CS T1 · trung bình</div>
-            <div class="kpi-value" id="fcAvgT1">—</div>
-            <div class="kpi-uo" id="fcUoT1"></div>
-            <div class="kpi-sub" id="fcAvgT1Sub"></div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">CHS_CS T4 · trung bình</div>
-            <div class="kpi-value" id="fcAvgT4">—</div>
-            <div class="kpi-uo" id="fcUoT4"></div>
-            <div class="kpi-sub" id="fcAvgT4Sub"></div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Tổng ACR</div>
-            <div class="kpi-value" id="fcElig" style="font-size:20px;">—</div>
-            <div class="kpi-sub" id="fcEligSub"></div>
-          </div>
-          <div class="kpi-card kpi-press">
-            <div class="kpi-label fc-press-head">
-              <span>DT cần go-live</span>
-              <span class="fc-press-month" id="fcPressMonthLabel"></span>
+          <div class="kpi-row kpi-row-4">
+            <div class="kpi-card">
+              <div class="kpi-label">Số deal nhận</div>
+              <div class="kpi-value" id="kpiDeals">—</div>
+              <div class="kpi-sub" id="kpiDealsSub"></div>
             </div>
-            <div class="kpi-value" id="fcPress" style="font-size:20px;">—</div>
-            <div class="kpi-sub" id="fcPressSub"></div>
-          </div>
-        </div>
-
-        <div class="fc-view-toggle" id="fcViewToggle">
-          <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
-          <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
-          <input type="text" id="fcSearch" class="search-input fc-search-input" placeholder="🔍 Tìm theo tên deal…">
-        </div>
-
-        <div id="fcYear1Block">
-          <div class="fc-filter fc-filter-slim" id="fcFilter">
-            <div class="fc-filter-row">
-              <label class="fc-filter-lbl" for="fcFilterMonth">Tháng</label>
-              <select id="fcFilterMonth" class="fc-month"></select>
-              <span class="fc-filter-note" id="fcFilterNote"></span>
-              <button type="button" class="fc-cols-toggle" id="fcColsToggle">⊞ Hiện đầy đủ</button>
+            <div class="kpi-card">
+              <div class="kpi-label">Tổng revenue đang thực hiện</div>
+              <div class="kpi-value" id="kpiRevenue">—</div>
+              <div class="kpi-sub" id="kpiRevenueSub"></div>
             </div>
-            <div class="fc-chips" id="fcChips"></div>
+            <div class="kpi-card">
+              <div class="kpi-label">CHS_CS trung bình</div>
+              <div class="kpi-value" id="kpiChs">—</div>
+              <div class="kpi-sub" id="kpiChsSub"></div>
+            </div>
+            <div class="kpi-card kpi-health">
+              <div class="kpi-label">Sức khỏe deal</div>
+              <div class="health-counts" id="healthCounts"></div>
+            </div>
+          </div>
+
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="chart-title">Theo bộ giải pháp <span class="chart-note">(theo ARR)</span></div>
+              <div class="donut-wrap" id="donutSolution"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Theo loại hợp đồng <span class="chart-note">(theo ARR)</span></div>
+              <div class="donut-wrap" id="donutContract"></div>
+            </div>
           </div>
 
           <div class="table-card">
+            <div class="table-head">
+              <div class="chart-title">Danh sách deal</div>
+              <div class="table-hint">Bấm vào một dòng để xem chi tiết</div>
+            </div>
             <div class="table-scroll">
-              <table class="deal-table fc-table fc-compact" id="fcTable">
+              <table class="deal-table">
                 <thead>
                   <tr>
                     <th>Khách hàng</th>
-                    <th class="fc-extra">Loại HĐ</th><th class="num fc-extra">Giá trị</th>
-                    <th class="fc-yh fc-yL">Go-live thực tế</th>
-                    <th class="fc-yh num">%Act T1</th><th class="fc-yh num">%Out T1</th>
-                    <th class="fc-yh num">%Act T4</th><th class="fc-yh num fc-yR">%Out T4</th>
-                    <th class="num">CHS T1</th><th class="num">CHS T4</th>
-                    <th class="fc-extra">Tier</th><th class="fc-extra">Trạng thái</th>
-                    <th class="fc-extra">Tháng CR</th><th class="num fc-extra">ACR</th>
+                    <th>Vai trò</th>
+                    <th class="th-sort" id="sortDate">Ngày nhận ▾</th>
+                    <th class="num">ARR</th>
+                    <th>Trạng thái Go-live</th>
+                    <th class="num">CHS_CS</th>
                   </tr>
                 </thead>
-                <tbody id="fcTbody"></tbody>
+                <tbody id="dealTbody"></tbody>
               </table>
             </div>
-            <div class="empty" id="fcEmpty" style="display:none;">Đang tải dữ liệu từ sheet Database…</div>
+            <div class="empty" id="tableEmpty" style="display:none;">Không có deal nào nhận trong khoảng thời gian này.<br>Thử nới rộng bộ lọc hoặc bấm "Tất cả".</div>
           </div>
-        </div>
 
-        <!-- ACR NHIỀU NĂM (Năm 2-5) -->
-        <div id="fcMultiBlock" style="display:none;">
-          <div class="fc-filter fc-filter-slim">
-            <div class="fc-filter-row">
-              <label class="fc-filter-lbl" for="mcFilterMonth">Tháng nhận Com</label>
-              <select id="mcFilterMonth" class="fc-month"></select>
-              <span class="fc-filter-note">— deal có kỳ nhận Com Năm 2++ rơi vào tháng này</span>
+        </section>
+
+        <!-- TAB: FORECAST -->
+        <section class="tab-panel" id="panel-forecast" style="display:none;">
+
+          <div class="fc-kpis">
+            <div class="kpi-card">
+              <div class="kpi-label">CHS_CS T1 · trung bình</div>
+              <div class="kpi-value" id="fcAvgT1">—</div>
+              <div class="kpi-uo" id="fcUoT1"></div>
+              <div class="kpi-sub" id="fcAvgT1Sub"></div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">CHS_CS T4 · trung bình</div>
+              <div class="kpi-value" id="fcAvgT4">—</div>
+              <div class="kpi-uo" id="fcUoT4"></div>
+              <div class="kpi-sub" id="fcAvgT4Sub"></div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Tổng ACR</div>
+              <div class="kpi-value" id="fcElig" style="font-size:22px;">—</div>
+              <div class="kpi-sub" id="fcEligSub"></div>
+            </div>
+            <div class="kpi-card kpi-press">
+              <div class="kpi-label fc-press-head">
+                <span>DT cần go-live</span>
+                <span class="fc-press-month" id="fcPressMonthLabel"></span>
+              </div>
+              <div class="kpi-value" id="fcPress" style="font-size:22px;">—</div>
+              <div class="kpi-sub" id="fcPressSub"></div>
             </div>
           </div>
 
-          <div class="fc-bar fc-bar-slim">
-            <div class="fc-bar-actions">
-              <span class="fc-flag" id="mcFlag"></span>
-              <button class="btn fc-save" id="mcSaveBtn">Lưu &amp; đẩy về sheet</button>
+          <div class="fc-view-toggle" id="fcViewToggle">
+            <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
+            <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
+            <input type="text" id="fcSearch" class="search-input fc-search-input" placeholder="🔍 Tìm theo tên deal…">
+          </div>
+
+          <div id="fcYear1Block">
+            <div class="fc-filter fc-filter-slim" id="fcFilter">
+              <div class="fc-filter-row">
+                <label class="fc-filter-lbl" for="fcFilterMonth">Tháng</label>
+                <select id="fcFilterMonth" class="fc-month"></select>
+                <span class="fc-filter-note" id="fcFilterNote"></span>
+                <button type="button" class="fc-cols-toggle" id="fcColsToggle">⊞ Hiện đầy đủ</button>
+                <div class="fc-bar-actions">
+                  <span class="fc-flag" id="fcFlag"></span>
+                  <button class="btn fc-save" id="fcSaveBtn">Lưu</button>
+                </div>
+              </div>
+              <div class="fc-chips" id="fcChips"></div>
+            </div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="deal-table fc-table fc-compact" id="fcTable">
+                  <thead>
+                    <tr>
+                      <th>Khách hàng</th>
+                      <th class="fc-extra">Loại HĐ</th><th class="num fc-extra">Giá trị</th>
+                      <th class="fc-yh fc-yL">Go-live thực tế</th>
+                      <th class="fc-yh num">%Act T1</th><th class="fc-yh num">%Out T1</th>
+                      <th class="fc-yh num">%Act T4</th><th class="fc-yh num fc-yR">%Out T4</th>
+                      <th class="num">CHS T1</th><th class="num">CHS T4</th>
+                      <th class="fc-extra">Tier</th><th class="fc-extra">Trạng thái</th>
+                      <th class="fc-extra">Tháng CR</th><th class="num fc-extra">ACR</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fcTbody"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="fcEmpty" style="display:none;">Đang tải dữ liệu từ sheet Database…</div>
             </div>
           </div>
 
-          <div class="table-card">
-            <div class="table-scroll">
-              <table class="deal-table fc-table">
-                <thead>
-                  <tr>
-                    <th>Khách hàng</th><th>Kỳ · Năm</th><th class="fc-extra">Tháng nhận Com</th>
-                    <th class="fc-yh num">%Active</th><th class="fc-yh num">%Output</th>
-                    <th class="num">CHS_CS</th><th class="num fc-extra">ACR</th>
-                  </tr>
-                </thead>
-                <tbody id="mcTbody"></tbody>
-              </table>
+          <!-- ACR NHIỀU NĂM (Năm 2-5) -->
+          <div id="fcMultiBlock" style="display:none;">
+            <div class="fc-filter fc-filter-slim">
+              <div class="fc-filter-row">
+                <label class="fc-filter-lbl" for="mcFilterMonth">Tháng nhận Com</label>
+                <select id="mcFilterMonth" class="fc-month"></select>
+                <span class="fc-filter-note">— deal có kỳ nhận Com Năm 2++ rơi vào tháng này</span>
+                <div class="fc-bar-actions">
+                  <span class="fc-flag" id="mcFlag"></span>
+                  <button class="btn fc-save" id="mcSaveBtn">Lưu</button>
+                </div>
+              </div>
             </div>
-            <div class="empty" id="mcEmpty" style="display:none;"></div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="deal-table fc-table">
+                  <thead>
+                    <tr>
+                      <th>Khách hàng</th><th>Kỳ · Năm</th><th class="fc-extra">Tháng nhận Com</th>
+                      <th class="fc-yh num">%Active</th><th class="fc-yh num">%Output</th>
+                      <th class="num">CHS_CS</th><th class="num fc-extra">ACR</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mcTbody"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="mcEmpty" style="display:none;"></div>
+            </div>
           </div>
-        </div>
 
-      </section>
+        </section>
 
-      <!-- TAB: DASHBOARD -->
-      <section class="tab-panel" id="panel-dashboard" style="display:none;">
+        <!-- TAB: DASHBOARD / SCORECARD -->
+        <section class="tab-panel" id="panel-dashboard" style="display:none;">
 
-        <div class="dash-hero" id="dashHero">
-          <div class="dash-hero-left">
-            <div class="ps-avatar" id="dbAvatar">CS</div>
+          <!-- Hero thu nhập: ui.js tự lấy số từ #comTfoot, app.js không đổi -->
+          <div class="income-hero" id="incomeHero" style="display:none;">
             <div>
-              <div class="ps-name" id="dbName">—</div>
-              <div class="ps-sub" id="dbSub">—</div>
+              <div class="ih-lb">Tổng thu nhập ước tính</div>
+              <div class="ih-v" id="ihTotal">—</div>
+              <div class="ih-lb" id="ihMonth"></div>
             </div>
-          </div>
-          <div class="dash-hero-right">
-            <label for="dbMonth">Tháng đánh giá</label>
-            <select id="dbMonth" class="fc-month"></select>
-          </div>
-        </div>
-
-        <div class="dash-empty" id="dashEmpty" style="display:none;"></div>
-
-        <div id="dashBody" style="display:none;">
-
-          <!-- PERFORMANCE vs KPI/GOAL/OUT -->
-          <div class="chart-card dash-card">
-            <div class="chart-title">Performance tháng <span class="chart-note">— so với mốc KPI / GOAL / OUT của level (chính sách mục 6.2)</span></div>
-            <div class="perf-grid" id="perfGrid"></div>
-            <div class="perf-rating" id="perfRating"></div>
+            <div class="ih-side"><div class="ih-lb">Lương cứng</div><div class="v" id="ihSalary">—</div></div>
+            <div class="ih-side"><div class="ih-lb">Commission</div><div class="v" id="ihCom">—</div></div>
           </div>
 
-          <!-- COMMISSION -->
-          <div class="table-card dash-card">
-            <div class="table-head">
-              <div class="chart-title">Commission trong tháng <span class="chart-note">— chính sách mục 6.3 &amp; 6.5</span></div>
-              <div class="table-hint" id="comRateHint"></div>
+          <div class="dash-hero" id="dashHero">
+            <div class="dash-hero-left">
+              <div class="ps-avatar" id="dbAvatar">CS</div>
+              <div>
+                <div class="ps-name" id="dbName">—</div>
+                <div class="ps-sub" id="dbSub">—</div>
+              </div>
             </div>
-            <div class="table-scroll">
-              <table class="deal-table com-table">
-                <thead>
-                  <tr>
-                    <th>Khách hàng</th><th>Kỳ</th><th>Nguồn</th><th class="num">ACR</th>
-                    <th class="num">CHS_CS</th><th>Điều kiện ≥ 50</th>
-                    <th class="num">% Com</th><th class="num">Commission</th>
-                  </tr>
-                </thead>
-                <tbody id="comTbody"></tbody>
-                <tfoot id="comTfoot"></tfoot>
-              </table>
-            </div>
-            <div class="empty" id="comEmpty" style="display:none;"></div>
-          </div>
-
-          <!-- HEALTH BOARD + RADAR -->
-          <div class="chart-row">
-            <div class="chart-card">
-              <div class="chart-title">Sức khỏe portfolio <span class="chart-note">(CHS_CS mốc gần nhất)</span></div>
-              <div class="health-strip" id="dbHealthStrip" style="margin:12px 0 8px;"></div>
-              <div class="health-counts" id="dbHealthCounts"></div>
-              <div class="rescue-list" id="dbRescue"></div>
-            </div>
-            <div class="chart-card">
-              <div class="chart-title">Radar kỳ đo sắp tới <span class="chart-note">(ACR đang "treo" theo mốc T1 / T4)</span></div>
-              <div class="radar-list" id="dbRadar"></div>
+            <div class="dash-hero-right">
+              <label for="dbMonth">Tháng đánh giá</label>
+              <select id="dbMonth" class="fc-month"></select>
             </div>
           </div>
 
-          <p class="dash-note" id="dashNote"></p>
-        </div>
-      </section>
+          <div class="dash-empty" id="dashEmpty" style="display:none;"></div>
 
-    </main>
+          <div id="dashBody" style="display:none;">
+
+            <!-- PERFORMANCE vs KPI/GOAL/OUT -->
+            <div class="chart-card dash-card">
+              <div class="chart-title">Performance tháng <span class="chart-note">— so với mốc KPI / GOAL / OUT của level (chính sách mục 6.2)</span></div>
+              <div class="perf-grid" id="perfGrid"></div>
+              <div class="perf-rating" id="perfRating"></div>
+            </div>
+
+            <!-- COMMISSION -->
+            <div class="table-card dash-card">
+              <div class="table-head">
+                <div class="chart-title">Commission trong tháng <span class="chart-note">— chính sách mục 6.3 &amp; 6.5</span></div>
+                <div class="table-hint" id="comRateHint"></div>
+              </div>
+              <div class="table-scroll">
+                <table class="deal-table com-table">
+                  <thead>
+                    <tr>
+                      <th>Khách hàng</th><th>Kỳ</th><th>Nguồn</th><th class="num">ACR</th>
+                      <th class="num">CHS_CS</th><th>Điều kiện ≥ 50</th>
+                      <th class="num">% Com</th><th class="num">Commission</th>
+                    </tr>
+                  </thead>
+                  <tbody id="comTbody"></tbody>
+                  <tfoot id="comTfoot"></tfoot>
+                </table>
+              </div>
+              <div class="empty" id="comEmpty" style="display:none;"></div>
+            </div>
+
+            <!-- HEALTH BOARD + RADAR -->
+            <div class="chart-row">
+              <div class="chart-card">
+                <div class="chart-title">Sức khỏe portfolio <span class="chart-note">(CHS_CS mốc gần nhất)</span></div>
+                <div class="health-strip" id="dbHealthStrip" style="margin:12px 0 8px;"></div>
+                <div class="health-counts" id="dbHealthCounts"></div>
+                <div class="rescue-list" id="dbRescue"></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Radar kỳ đo sắp tới <span class="chart-note">(ACR đang "treo" theo mốc T1 / T4)</span></div>
+                <div class="radar-list" id="dbRadar"></div>
+              </div>
+            </div>
+
+            <p class="dash-note" id="dashNote"></p>
+          </div>
+        </section>
+
+      </main>
+    </div>
   </div>
 
   <!-- =====================================================
@@ -527,10 +604,12 @@
       el.style.animationDuration = (12 + (i%5)*1.6) + 's';
       layer.appendChild(el);
     });
-
-    // App logic từ app-main.js
   </script>
+
+  <!-- app.js: KHÔNG đổi so với bản hiện tại -->
   <script src="app.js"></script>
+  <!-- ui.js: chỉ lo phần giao diện mới (sidebar, theme, hero thu nhập) -->
+  <script src="ui.js"></script>
 
 </body>
 </html>
