@@ -471,7 +471,9 @@
           </div>
 
           <div class="dash-hero" id="dashHero">
-            <div class="dash-hero-left">
+            <!-- Đã hiện ở header rồi (profile-strip) — 3 id này vẫn phải
+                 tồn tại vì app.js ghi trực tiếp vào đây, chỉ ẩn khỏi mắt. -->
+            <div class="dash-hero-left" style="display:none;" aria-hidden="true">
               <div class="ps-avatar" id="dbAvatar">CS</div>
               <div>
                 <div class="ps-name" id="dbName">—</div>
