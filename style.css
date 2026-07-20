@@ -293,6 +293,13 @@ body.app-mode .app-wrapper{display:grid}
 .topbar{
   position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:14px;
   padding:16px 26px 14px; background:transparent; border:0;
+  /* KHÔNG đặt mask/backdrop-filter trực tiếp lên .topbar: mask cắt cứng mọi
+     thứ tràn ra ngoài, làm menu tài khoản bung xuống bị xoá mất. Đẩy cả hai
+     xuống lớp nền ::before nằm dưới, nội dung nhờ vậy không bị cắt. */
+  overflow:visible;
+}
+.topbar::before{
+  content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
   -webkit-mask-image:linear-gradient(180deg,#000 0,#000 72%,transparent 100%);
   mask-image:linear-gradient(180deg,#000 0,#000 72%,transparent 100%);
@@ -390,6 +397,13 @@ body.app-mode .app-wrapper{display:grid}
 .ps-chip{padding:4px 11px; border-radius:var(--r-pill); font:600 11px Inter; white-space:nowrap;
   background:var(--glass-2); border:1px solid var(--stroke-soft); color:var(--tx-2)}
 .ps-chip.lvl{color:var(--lav)} .ps-chip.sal{color:var(--healthy)}
+/* Trên header chỉ giữ level cho gọn: bỏ chip lương, bỏ dòng email.
+   #psSub vẫn nằm trong DOM (app.js ghi vào), chỉ ẩn khỏi mắt. */
+.user-box .ps-chip.sal{display:none}
+.user-box .ps-sub{display:none}
+.ps-role{font-size:11px; color:var(--tx-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px}
+/* Ở tab Scorecard (khối .dash-hero) vẫn hiện đủ như cũ */
+.dash-hero .ps-sub{display:block} .dash-hero .ps-role{display:none}
 /* trang Scorecard vẫn dùng ps-avatar/ps-name cỡ lớn trong .dash-hero */
 .dash-hero .ps-avatar{width:44px; height:44px; flex:0 0 44px; font-size:14px}
 .dash-hero .ps-name{font:600 15px "Space Grotesk"; max-width:none; text-align:left}

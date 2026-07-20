@@ -23,6 +23,49 @@
   var LS_THEME = 'cs_tool_theme';
 
   /* -------------------------------------------------------
+     0. NGHE PROFILE TỪ API — avatar lưu ở cột "avatar" trong
+        sheet "Danh sách CS" (nguồn chân lý, dùng được mọi máy).
+        ui.js nạp trước app.js, bọc window.fetch lại: mỗi lần
+        app.js gọi API và response có d.profile thì đọc luôn
+        avatar từ đó — không tốn thêm request nào.
+     ------------------------------------------------------- */
+  var _fetch = window.fetch;
+  window.fetch = function (input, init) {
+    var p = _fetch.call(window, input, init);
+    try {
+      var CFG = window.CS_TOOL_CONFIG || {};
+      var url = typeof input === 'string' ? input : ((input && input.url) || '');
+      if (CFG.API_URL && url.indexOf(CFG.API_URL) === 0) {
+        p = p.then(function (res) {
+          try {
+            res.clone().json().then(function (d) {
+              if (d && d.profile) onProfileFromApi(d.profile);
+            }).catch(function () {});
+          } catch (e) {}
+          return res;
+        });
+      }
+    } catch (e) {}
+    return p;
+  };
+
+  function onProfileFromApi(profile) {
+    var email = profile.email || '';
+    if (!email) return;
+    // Trường avatar CÓ trong response → sheet là nguồn chân lý:
+    // có giá trị thì cache + áp dụng, rỗng thì xoá cache cũ.
+    if ('avatar' in profile) {
+      try {
+        var v = String(profile.avatar || '').trim();
+        if (v) localStorage.setItem(avatarKey(email), v);
+        else localStorage.removeItem(avatarKey(email));
+      } catch (e) {}
+    }
+    // Trường avatar KHÔNG có (backend chưa trả cột mới) → giữ cache máy.
+    applyAvatarEverywhere();
+  }
+
+  /* -------------------------------------------------------
      1. THU GỌN / MỞ RỘNG SIDEBAR
      ------------------------------------------------------- */
   var wrapper = $('appWrapper');
@@ -165,9 +208,20 @@
     ['psAvatar', 'dbAvatar'].forEach(function (id) {
       var el = $(id);
       if (!el) return;
-      if (data) { el.style.backgroundImage = 'url(' + data + ')'; el.classList.add('has-img'); }
+      // data có thể là dataURL (lưu thẳng trong sheet) hoặc link ảnh (lưu Drive)
+      if (data) { el.style.backgroundImage = 'url("' + data + '")'; el.classList.add('has-img'); }
       else { el.style.backgroundImage = ''; el.classList.remove('has-img'); }
     });
+    syncRole();
+  }
+
+  // Header chỉ hiện chức danh, bỏ email cho gọn (app.js ghi "Chức danh · email")
+  function syncRole() {
+    var sub = $('psSub'), role = $('psRole');
+    if (!sub || !role) return;
+    var t = String(sub.textContent || '').trim();
+    if (!t || t === '—') { role.textContent = ''; return; }
+    role.textContent = t.split('·')[0].trim();
   }
 
   function pmBuildLevels() {
@@ -220,7 +274,7 @@
     var name = $('pmName').value.trim() || 'CS';
     var parts = name.split(/\s+/);
     el.textContent = (parts.length > 1 ? parts[parts.length - 2][0] + parts[parts.length - 1][0] : name.slice(0, 2)).toUpperCase();
-    if (pmAvatarData) { el.style.backgroundImage = 'url(' + pmAvatarData + ')'; el.classList.add('has-img'); }
+    if (pmAvatarData) { el.style.backgroundImage = 'url("' + pmAvatarData + '")'; el.classList.add('has-img'); }
     else { el.style.backgroundImage = ''; el.classList.remove('has-img'); }
   }
 
@@ -265,7 +319,7 @@
     btn.setAttribute('disabled', ''); sp.classList.remove('hidden'); tx.textContent = 'Đang lưu…';
 
     var email = currentEmailFromUI();
-    // avatar: lưu ngay trên máy (không phụ thuộc backend)
+    // avatar: cache ngay trên máy để hiện tức thì, đồng thời gửi lên sheet
     try {
       if (pmAvatarData) localStorage.setItem(avatarKey(email), pmAvatarData);
       else localStorage.removeItem(avatarKey(email));
@@ -278,9 +332,10 @@
     fetch(CFG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      // cùng action & payload với màn đăng ký lần đầu của app.js —
-      // backend ghi đè dòng của user trong sheet "Danh sách CS"
-      body: JSON.stringify({ token: token, action: 'register', hoTen: hoTen, level: level, salary: salary }),
+      // cùng action & payload với màn đăng ký lần đầu của app.js, cộng thêm
+      // trường avatar (dataURL ảnh 128px, ~5-10KB) — backend ghi vào cột
+      // "avatar" trong sheet "Danh sách CS"
+      body: JSON.stringify({ token: token, action: 'register', hoTen: hoTen, level: level, salary: salary, avatar: pmAvatarData || '' }),
     })
       .then(function (r) { return r.text(); })
       .then(function (t) { return JSON.parse(t); })

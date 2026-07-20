@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="login-mode">
@@ -237,7 +237,11 @@
             <div class="ps-chips" id="psChips"></div>
             <div class="ps-info">
               <div class="ps-name" id="psName">—</div>
+              <!-- app.js ghi "Chức danh · email" vào #psSub. Giữ nguyên phần tử
+                   này (ẩn đi) để app.js không lỗi và ui.js còn đọc được email;
+                   phần hiện ra cho gọn là #psRole do ui.js điền. -->
               <div class="ps-sub" id="psSub">—</div>
+              <div class="ps-role" id="psRole"></div>
             </div>
             <div class="ps-avatar" id="psAvatar">CS</div>
             <svg class="ps-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
@@ -573,7 +577,7 @@
             <label class="btn pm-upload-btn" for="pmAvatarFile">Đổi ảnh đại diện</label>
             <input type="file" id="pmAvatarFile" accept="image/*" hidden>
             <button class="btn" id="pmAvatarRemove" type="button">Dùng chữ cái tên</button>
-            <div class="reg-hint">Ảnh lưu theo tài khoản trên máy này, tự hiện lại mỗi lần đăng nhập.</div>
+            <div class="reg-hint">Ảnh được lưu vào cột avatar trong sheet Danh sách CS — đăng nhập máy nào cũng tự hiện lại.</div>
           </div>
         </div>
 
@@ -673,10 +677,11 @@
     });
   </script>
 
+  <!-- ui.js nạp TRƯỚC app.js: nó chỉ lo giao diện, nhưng cần cài "tai nghe"
+       fetch trước khi app.js gọi API lần đầu để đọc được avatar từ profile -->
+  <script src="ui.js?v=2"></script>
   <!-- app.js: KHÔNG đổi so với bản hiện tại -->
   <script src="app.js"></script>
-  <!-- ui.js: chỉ lo phần giao diện mới (sidebar, theme, hero thu nhập) -->
-  <script src="ui.js"></script>
 
 </body>
 </html>
