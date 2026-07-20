@@ -2391,60 +2391,6 @@ function loadDeals(token, silentRetryOnFail, isBackgroundRefresh) {
         '<p><b>2. Forecast</b> — Sub-tab <i>Năm 1</i>: nhập Go-live thực tế, %Active T1/T4, %Output T1/T4 cho deal đang trong năm hợp đồng đầu; các cột Tier/Trạng thái/CHS/ACR tự tính lại tại chỗ, chỉ lưu chính thức khi bấm Lưu. Sub-tab <i>Năm 2++</i>: nhập %Active/%Output cho deal đã sang năm hợp đồng thứ 2 trở đi, lọc theo tháng nhận Com, có gợi ý %Output năm liền trước. Lưu xong tự nhảy sang Scorecard đúng tháng vừa nhập.</p>' +
         '<p><b>3. Scorecard</b> — Chọn tháng đánh giá để xem Performance so với KPI/GOAL/OUT của đúng level, bảng Commission (gộp cả deal năm 1 và ACR nhiều năm khớp tháng đang xem), sức khỏe portfolio và rescue list trước kỳ đo T4. Bấm vào deal trong bảng hoặc rescue list để nhảy sang Forecast sửa số liệu.</p>',
     },
-    {
-      date: '18/07/2026',
-      title: 'Big Update: ACR nhiều năm · combo CS_PM+CS_A · search box',
-      items: [
-        'Forecast: thêm sub-tab "ACR nhiều năm (Năm 2-5)" — lọc theo tháng (mặc định tháng hiện tại), tự tìm deal có "Tháng nhận Com T1/T4 - Năm 2..5" khớp tháng đó, cho nhập %Active/%Output, gợi ý %Output năm liền trước kèm nút "dùng".',
-        'Lưu ACR nhiều năm xong tự nhảy sang Scorecard, chấm đúng tháng vừa nhập.',
-        'Scorecard: bảng Commission giờ gộp cả deal năm 1 lẫn ACR nhiều năm khớp tháng đang xem, tính chung 1 bảng %Com theo Level (policy 6.4 không có bảng riêng cho năm 2+).',
-        'Combo CS_PM+CS_A: deal nào cột "Vai trò phụ trách" ghi cả CS_PM,CS_A (tự cân, không có CS_A riêng) → %Com T1 = %Com Level cộng thêm 1.5/2/2.3% (Under/KPI/GOAL/OUT) của CS_A, đúng theo "chính sách kiêm nhiệm" mục 4 policy. Bảng chỉ hiện %Com cuối cùng, không lộ phép cộng.',
-        'Thêm search box theo tên deal ở cả Overview và Forecast (dùng chung cho cả 2 sub-tab Forecast).',
-      ],
-    },
-    {
-      date: '17/07/2026',
-      title: 'Fix: đăng nhập Google bị khoá khi Chrome tắt "Third-party sign-in" (FedCM)',
-      items: [
-        'Phát hiện qua console: "FedCM was disabled... via site settings" — Chrome tắt third-party sign-in cho domain github.io (thường do trước đó từng bấm từ chối popup Google 1-2 lần), khiến One Tap luôn thất bại ngay từ đầu, không liên quan tới việc đổi tên repo.',
-        'Thêm nút Google THẬT (renderButton chính chủ) làm phương án dự phòng — dựng sẵn, ẩn đi lúc load trang.',
-        'Khi One Tap/FedCM thất bại vì BẤT KỲ lý do gì (bị chặn, bị tắt, timeout...), tự động hiện nút Google thật kèm nút "Thử lại One Tap" — không cần đợi báo IT bật lại site setting mới đăng nhập được.',
-        'Nút thật mở popup OAuth chuẩn, không phụ thuộc cơ chế "silent prompt" của One Tap đang bị Google khai tử dần dưới FedCM — bền hơn về lâu dài cho cả team.',
-      ],
-    },
-    {
-      date: '17/07/2026',
-      title: 'Fix bug: bấm "Continue with Google" cứ load, không phản hồi',
-      items: [
-        'Nguyên nhân: khoá promptInFlight chặn gọi chồng google.accounts.id.prompt() không có timeout — nếu 1 lần gọi bị treo (trình duyệt chặn FedCM/cookie bên thứ 3, tiện ích chặn quảng cáo…) thì khoá kẹt vĩnh viễn, mọi lần bấm nút sau đó bị bỏ qua trong im lặng.',
-        'Thêm timeout cứng 6s cho mỗi lần gọi prompt(); hết giờ vẫn không có phản hồi thì tự động nhả khoá + reset nút.',
-        'Nếu có lệnh gọi đến trong lúc 1 lần khác đang chạy dở (VD: lần tự động lúc load trang), lệnh gọi đó được xếp hàng chờ thay vì bị bỏ qua — đảm bảo nút luôn được reset đúng lúc, không bị treo vĩnh viễn dù rơi vào tình huống nào.',
-        'Khi thất bại, hiện toast báo lỗi rõ ràng kèm gợi ý xử lý (tắt tiện ích chặn quảng cáo/cookie bên thứ 3, thử ẩn danh, bấm lại) thay vì chỉ im lặng reset nút.',
-      ],
-    },
-    {
-      date: '17/07/2026',
-      title: 'Hợp nhất bộ chọn tháng · liên kết chéo tab · đổi tên header',
-      items: [
-        'Forecast: gộp 2 dropdown tháng (KPI "DT phải go-live" và bộ lọc chip) thành 1 — trước đây 2 ô đứng cạnh nhau dễ nhầm.',
-        'Bấm vào 1 deal ở Overview (mục chi tiết) hoặc Scorecard (rescue list / bảng commission) → nhảy thẳng sang Forecast, tự lọc đúng deal đó để sửa số liệu.',
-        'Đổi tên tab: "Tổng quan" → Overview, "Dashboard" → Scorecard.',
-        'Overview: KPI CHS_CS ghi rõ nguồn (ưu tiên CHS_CS T4, chưa có thì lấy T1).',
-        'Thêm nút Changelog & Playbook trên header.',
-      ],
-    },
-    {
-      date: '15/07/2026',
-      title: 'Big Update: đăng ký lần đầu · profile · Scorecard',
-      items: [
-        'Thêm màn đăng ký bắt buộc lần đầu đăng nhập (Họ tên / Level / Salary) → lưu vào sheet "Danh sách CS".',
-        'Overview: thêm profile strip (tên, level, lương) + KPI "Số deal nhận".',
-        'Forecast: thêm bộ lọc theo tháng làm việc + 7 chip (kỳ đo tháng này, thiếu số kỳ đã qua, chưa GL theo các mốc, quá 200% TTGL).',
-        'Ra mắt tab Dashboard (nay là Scorecard): Performance vs KPI/GOAL/OUT theo policy 6.2, bảng Commission 6.3 + 6.5, sức khỏe portfolio, radar kỳ đo 3 tháng tới.',
-        'Fix bug: sửa 1 ô % rồi Lưu có thể xóa mất ngày Go-live đã lưu trên sheet (do payload gửi goLive rỗng) — nay giữ nguyên giá trị đã lưu nếu không sửa.',
-        'Fix bug: CHS T1/T4 ở Forecast trước chỉ tính theo ô đang sửa, deal đã có số trên sheet vẫn hiện "—" — nay tính trên dữ liệu đã lưu.',
-      ],
-    },
   ];
 
   function renderChangelog() {
