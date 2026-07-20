@@ -194,11 +194,6 @@
         <span class="nav-label">Làm mới dữ liệu</span>
         <span class="nav-fly">Làm mới dữ liệu</span>
       </button>
-      <button class="nav-item" id="logoutBtn" title="Đăng xuất" aria-label="Đăng xuất">
-        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-        <span class="nav-label">Đăng xuất</span>
-        <span class="nav-fly">Đăng xuất</span>
-      </button>
 
       <div class="side-spacer"></div>
 
@@ -256,6 +251,11 @@
             <button class="acc-item" id="accTheme" role="menuitem">
               <svg id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
               <span id="accThemeLb">Chế độ sáng</span>
+            </button>
+            <div class="acc-menu-divider"></div>
+            <button class="acc-item acc-item-danger" id="logoutBtn" role="menuitem">
+              <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Đăng xuất
             </button>
           </div>
 
@@ -504,11 +504,19 @@
 
           <div id="dashBody" style="display:none;">
 
-            <!-- PERFORMANCE vs KPI/GOAL/OUT -->
-            <div class="chart-card dash-card">
-              <div class="chart-title">Performance tháng <span class="chart-note">— so với mốc KPI / GOAL / OUT của level (chính sách mục 6.2)</span></div>
-              <div class="perf-grid" id="perfGrid"></div>
-              <div class="perf-rating" id="perfRating"></div>
+            <!-- PERFORMANCE + CẤU PHẦN THU NHẬP: hiện cùng hàng, mỗi cái nửa trang -->
+            <div class="chart-row">
+              <div class="chart-card dash-card">
+                <div class="chart-title">Performance tháng <span class="chart-note">— so với mốc KPI / GOAL / OUT của level (chính sách mục 6.2)</span></div>
+                <div class="perf-grid" id="perfGrid"></div>
+                <div class="perf-rating" id="perfRating"></div>
+              </div>
+
+              <!-- Cấu phần thu nhập: ui.js dựng lại từ các dòng tổng trong #comTfoot -->
+              <div class="chart-card dash-card" id="breakCard" style="display:none;">
+                <div class="chart-title">Cấu phần thu nhập tháng <span class="chart-note">— tách theo từng loại commission &amp; thưởng, chính sách mục 6.3 &amp; 6.5</span></div>
+                <div class="brk" id="comBreak"></div>
+              </div>
             </div>
 
             <!-- COMMISSION -->
@@ -531,12 +539,6 @@
                 </table>
               </div>
               <div class="empty" id="comEmpty" style="display:none;"></div>
-            </div>
-
-            <!-- Cấu phần thu nhập: ui.js dựng lại từ các dòng tổng trong #comTfoot -->
-            <div class="chart-card dash-card" id="breakCard" style="display:none;">
-              <div class="chart-title">Cấu phần thu nhập tháng <span class="chart-note">— tách theo từng loại commission &amp; thưởng, chính sách mục 6.3 &amp; 6.5</span></div>
-              <div class="brk" id="comBreak"></div>
             </div>
 
             <!-- HEALTH BOARD + RADAR -->
@@ -576,8 +578,6 @@
           <div class="pm-avatar-actions">
             <label class="btn pm-upload-btn" for="pmAvatarFile">Đổi ảnh đại diện</label>
             <input type="file" id="pmAvatarFile" accept="image/*" hidden>
-            <button class="btn" id="pmAvatarRemove" type="button">Dùng chữ cái tên</button>
-            <div class="reg-hint">Ảnh được lưu vào cột avatar trong sheet Danh sách CS — đăng nhập máy nào cũng tự hiện lại.</div>
           </div>
         </div>
 
