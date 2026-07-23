@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="login-mode">
@@ -217,6 +217,27 @@
           <span class="topbar-mark" id="pageSub">Sức khỏe portfolio</span>
         </div>
 
+        <!-- Khối điều khiển riêng theo tab, đặt lên header:
+             - Forecast: toggle Năm 1 / Năm 2++ (.fc-view-btn — hook có sẵn của app.js)
+             - Scorecard: chọn "Tháng đánh giá" (#dbMonth — app.js đọc/ghi theo id, không
+               quan tâm vị trí trong DOM)
+             ui.js (syncTitle) chỉ bật đúng khối theo tab đang mở, giống cách làm với
+             #headSearch bên dưới. -->
+        <div class="head-tab-extra" id="headTabExtra">
+          <div class="hte-block" id="hteForecast" style="display:none;">
+            <div class="fc-view-toggle" id="fcViewToggle">
+              <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
+              <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
+            </div>
+          </div>
+          <div class="hte-block" id="hteScorecard" style="display:none;">
+            <div class="dash-hero-right">
+              <label for="dbMonth">Tháng đánh giá</label>
+              <select id="dbMonth" class="fc-month"></select>
+            </div>
+          </div>
+        </div>
+
         <!-- Ô tìm kiếm dùng chung: app.js gắn sự kiện theo id, ui.js chỉ
              quyết định ô nào hiện ra tuỳ tab đang mở -->
         <div class="head-search" id="headSearch">
@@ -395,10 +416,7 @@
             </div>
           </div>
 
-          <div class="fc-view-toggle" id="fcViewToggle">
-            <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
-            <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
-          </div>
+          <!-- Toggle Năm 1 / Năm 2++ đã chuyển lên header — xem #hteForecast -->
 
           <div id="fcYear1Block">
             <div class="fc-filter fc-filter-slim" id="fcFilter">
@@ -484,19 +502,17 @@
             <div class="ih-side"><div class="ih-lb">Commission</div><div class="v" id="ihCom">—</div></div>
           </div>
 
-          <div class="dash-hero" id="dashHero">
-            <!-- Đã hiện ở header rồi (profile-strip) — 3 id này vẫn phải
-                 tồn tại vì app.js ghi trực tiếp vào đây, chỉ ẩn khỏi mắt. -->
-            <div class="dash-hero-left" style="display:none;" aria-hidden="true">
+          <!-- "Tháng đánh giá" đã chuyển lên header — xem #hteScorecard.
+               Khối này giờ chỉ còn giữ 3 id mà app.js ghi trực tiếp không qua
+               null-check (#dbAvatar/#dbName/#dbSub) — ẩn cả khối để không lộ
+               ra một card trống giữa trang. -->
+          <div class="dash-hero" id="dashHero" style="display:none;">
+            <div class="dash-hero-left" aria-hidden="true">
               <div class="ps-avatar" id="dbAvatar">CS</div>
               <div>
                 <div class="ps-name" id="dbName">—</div>
                 <div class="ps-sub" id="dbSub">—</div>
               </div>
-            </div>
-            <div class="dash-hero-right">
-              <label for="dbMonth">Tháng đánh giá</label>
-              <select id="dbMonth" class="fc-month"></select>
             </div>
           </div>
 
@@ -679,9 +695,9 @@
 
   <!-- ui.js nạp TRƯỚC app.js: nó chỉ lo giao diện, nhưng cần cài "tai nghe"
        fetch trước khi app.js gọi API lần đầu để đọc được avatar từ profile -->
-  <script src="ui.js?v=3"></script>
+  <script src="ui.js?v=4"></script>
   <!-- app.js: KHÔNG đổi so với bản hiện tại -->
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 
 </body>
 </html>

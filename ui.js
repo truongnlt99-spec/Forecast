@@ -395,6 +395,13 @@
       ov.style.display = key === 'overview' ? '' : 'none';
       fc.style.display = key === 'forecast' ? '' : 'none';
     }
+
+    // Khối điều khiển riêng theo tab trên header (toggle Năm 1/Năm 2++ của
+    // Forecast, chọn Tháng đánh giá của Scorecard) — cùng cơ chế bật/tắt
+    // như ô tìm kiếm ở trên, không đụng tới sự kiện app.js đã gắn.
+    var hteF = $('hteForecast'), hteS = $('hteScorecard');
+    if (hteF) hteF.style.display = key === 'forecast' ? '' : 'none';
+    if (hteS) hteS.style.display = key === 'dashboard' ? '' : 'none';
   }
   document.querySelectorAll('.tab').forEach(function (t) {
     t.addEventListener('click', function () { setTimeout(syncTitle, 0); });
