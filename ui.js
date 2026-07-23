@@ -460,6 +460,14 @@
     var hteF = $('hteForecast'), hteS = $('hteScorecard');
     if (hteF) hteF.style.display = key === 'forecast' ? '' : 'none';
     if (hteS) hteS.style.display = key === 'dashboard' ? '' : 'none';
+
+    // #userBox vốn có sẵn margin-left:auto (để tự đẩy sát phải khi không có
+    // gì khác). Ở tab Scorecard, #hteScorecard CŨNG có margin-left:auto để
+    // tự đẩy sát phải — 2 margin:auto cùng lúc sẽ CHIA ĐÔI khoảng trống còn
+    // lại, để hở 1 khoảng lớn ở giữa thay vì nằm sát nhau. Tắt auto-margin
+    // của #userBox riêng ở tab này để chỉ #hteScorecard đẩy cả cặp sang phải.
+    var userBox = $('userBox');
+    if (userBox) userBox.style.marginLeft = (key === 'dashboard') ? '0' : '';
   }
   document.querySelectorAll('.tab').forEach(function (t) {
     t.addEventListener('click', function () { setTimeout(syncTitle, 0); });
@@ -595,5 +603,107 @@
   }
   if (fcChips) {
     new MutationObserver(syncMissing).observe(fcChips, { childList: true, subtree: true });
+  }
+
+  /* -------------------------------------------------------
+     8. DONUT TƯƠNG TÁC — app.js chỉ vẽ tĩnh #donutSolution/#donutContract
+        (SVG lát cắt + legend, xem renderDonut trong app.js). Ở đây chỉ
+        gắn thêm hover: rê vào legend thì tô đậm đúng lát cắt tương ứng
+        (khớp theo THỨ TỰ phần tử, lát cắt thứ i ứng với legend-item thứ
+        i), và ngược lại — không tính toán lại số liệu, không đụng logic
+        app.js. Dùng event delegation trên chính #donutSolution/#donutContract
+        (2 id này app.js không bao giờ xoá/tạo lại) nên không cần gắn lại
+        listener mỗi lần bộ lọc đổi làm donut vẽ lại.
+     ------------------------------------------------------- */
+  function bindDonut(id) {
+    var wrap = $(id);
+    if (!wrap) return;
+
+    function items() { return Array.prototype.slice.call(wrap.querySelectorAll('.legend-item')); }
+    function circles() { return Array.prototype.slice.call(wrap.querySelectorAll('circle')); }
+
+    function setActive(idx) {
+      circles().forEach(function (c, i) { c.classList.toggle('donut-dim', idx > -1 && i !== idx); });
+      items().forEach(function (it, i) {
+        it.classList.toggle('legend-dim', idx > -1 && i !== idx);
+        it.classList.toggle('legend-active', i === idx);
+      });
+    }
+
+    wrap.addEventListener('mouseover', function (e) {
+      var item = e.target.closest('.legend-item');
+      var circle = e.target.closest('circle');
+      var idx = item ? items().indexOf(item) : (circle ? circles().indexOf(circle) : -1);
+      if (idx > -1) setActive(idx);
+    });
+    wrap.addEventListener('mouseout', function (e) {
+      if (!wrap.contains(e.relatedTarget)) setActive(-1);
+    });
+
+    // Tooltip gốc cho từng lát cắt — lấy đúng chữ legend app.js đã render,
+    // không tự tính lại số liệu.
+    function addTips() {
+      var cs = circles(), its = items();
+      cs.forEach(function (c, i) {
+        if (c.querySelector('title')) return;
+        var name = its[i] && its[i].querySelector('.legend-name');
+        var val = its[i] && its[i].querySelector('.legend-val');
+        var t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        t.textContent = (name ? name.textContent : '') + (val ? ' — ' + val.textContent : '');
+        c.insertBefore(t, c.firstChild);
+      });
+    }
+    addTips();
+    new MutationObserver(addTips).observe(wrap, { childList: true, subtree: true });
+  }
+  bindDonut('donutSolution');
+  bindDonut('donutContract');
+
+  /* -------------------------------------------------------
+     9. THANH PERFORMANCE (KPI/GOAL/OUT) — app.js vẽ 3 vạch mốc bằng
+        left:<mốc>% trên thang 0–100% (dashRenderPerf/perfBar trong
+        app.js). Khi cả 3 mốc đều cao (vd 78/80/83) thì rất sát nhau,
+        chữ nhãn (::after hiển thị attr(title) trong CSS) đè lên nhau.
+        Ở đây không sửa app.js — chỉ đọc lại left/title app.js đã render
+        rồi TÍNH LẠI theo thang phóng to 50–100% khi cả 3 mốc đều ≥ 50,
+        để 3 vạch giãn ra đủ chỗ cho chữ. Mốc nào < 50 thì giữ nguyên
+        thang 0–100% như cũ (không zoom).
+     ------------------------------------------------------- */
+  function numFrom(str) {
+    var m = /(-?\d+(?:[.,]\d+)?)\s*%/.exec(str || '');
+    return m ? parseFloat(m[1].replace(',', '.')) : null;
+  }
+  function zoomPct(v) { return Math.max(0, Math.min(100, (v - 50) * 2)); }
+
+  function enhancePerfBar(track) {
+    var ticks = Array.prototype.slice.call(track.querySelectorAll(':scope > .pf-tick'));
+    var fill = track.querySelector(':scope > .pf-fill');
+    if (!ticks.length || !fill) return;
+
+    var tickVals = ticks.map(function (t) { return numFrom(t.getAttribute('title')); });
+    var fillPct = numFrom(fill.getAttribute('style'));
+    if (tickVals.indexOf(null) !== -1 || fillPct == null) return;
+    if (Math.min.apply(null, tickVals) < 50) return; // số không lớn — giữ thang gốc
+
+    ticks.forEach(function (t, i) { t.style.left = zoomPct(tickVals[i]) + '%'; });
+    fill.style.width = zoomPct(fillPct) + '%';
+
+    if (!track.querySelector('.pf-axis-lbl')) {
+      var lo = document.createElement('span');
+      lo.className = 'pf-axis-lbl pf-axis-lo'; lo.textContent = '50%';
+      var hi = document.createElement('span');
+      hi.className = 'pf-axis-lbl pf-axis-hi'; hi.textContent = '100%';
+      track.appendChild(lo); track.appendChild(hi);
+    }
+  }
+  function enhancePerfGrid() {
+    var grid = $('perfGrid');
+    if (!grid) return;
+    Array.prototype.forEach.call(grid.querySelectorAll('.pf-track'), enhancePerfBar);
+  }
+  var perfGridEl = $('perfGrid');
+  if (perfGridEl) {
+    new MutationObserver(enhancePerfGrid).observe(perfGridEl, { childList: true });
+    enhancePerfGrid();
   }
 })();

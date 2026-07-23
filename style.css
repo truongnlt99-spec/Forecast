@@ -117,7 +117,7 @@ body.reg-mode .reg-screen{display:grid}
 .login-tab .dot{width:7px; height:7px; border-radius:50%; background:var(--healthy); box-shadow:0 0 10px var(--healthy)}
 .brand{display:flex; align-items:center; gap:11px}
 .brand-mark{
-  width:40px; height:40px; flex:0 0 40px; border-radius:12px; display:grid; place-items:center;
+  width:52px; height:52px; flex:0 0 52px; border-radius:16px; display:grid; place-items:center;
   background:linear-gradient(140deg,var(--cyan),var(--lav) 55%,var(--magenta));
   color:#0B0D17; font:700 13px "Space Grotesk"; box-shadow:0 6px 18px rgba(139,124,255,.35);
 }
@@ -359,7 +359,7 @@ body.app-mode .app-wrapper{display:grid}
    không đặt display/gap ở đây nữa — gap thật nằm ở .tab-panel-body, một
    lớp con mà app.js không bao giờ đụng vào. */
 .tab-panel{animation:rise .4s var(--ease) both}
-.tab-panel-body{display:flex; flex-direction:column; gap:44px}
+.tab-panel-body{display:flex; flex-direction:column; gap:22px}
 @keyframes rise{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
 
 /* =========================================================
@@ -392,10 +392,10 @@ body.app-mode .app-wrapper{display:grid}
 .chart-note{font:400 11.5px Inter; color:var(--tx-3)}
 .table-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px}
 .table-hint{font-size:11.5px; color:var(--tx-3); margin-left:auto}
-.chart-row{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:44px; column-gap:26px}
-.kpi-row{display:grid; row-gap:36px; column-gap:26px; grid-template-columns:repeat(4,minmax(0,1fr))}
+.chart-row{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:22px; column-gap:26px}
+.kpi-row{display:grid; row-gap:18px; column-gap:26px; grid-template-columns:repeat(4,minmax(0,1fr))}
 .kpi-row-4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.fc-kpis{display:grid; row-gap:36px; column-gap:26px; grid-template-columns:repeat(4,minmax(0,1fr))}
+.fc-kpis{display:grid; row-gap:18px; column-gap:26px; grid-template-columns:repeat(4,minmax(0,1fr))}
 .empty,.dash-empty,.pf-empty,.fc-empty{padding:30px 18px; text-align:center; font-size:13px; color:var(--tx-3); line-height:1.6}
 
 /* ---------- KPI card ---------- */
@@ -487,8 +487,8 @@ html[data-theme="dark"] input[type="date"],html[data-theme="dark"] select{color-
 /* Khối điều khiển riêng theo tab trên header (Forecast: Năm1/Năm2++,
    Scorecard: Tháng đánh giá) — xem #headTabExtra trong index.html */
 .head-tab-extra{display:flex; align-items:center}
-.head-tab-extra .dash-hero-right{margin-left:0}
-.head-tab-extra .dash-hero-right label{white-space:nowrap}
+/* Scorecard: chọn Tháng đánh giá — đặt sát lề phải, ngay trước avatar */
+#hteScorecard{margin-left:auto; display:flex; align-items:center}
 .filter-count{margin-left:auto; font-size:12px; color:var(--tx-3)}
 .ov-custom-range{display:flex; gap:12px; flex-wrap:wrap; width:100%}
 .filter-presets{display:flex; gap:8px; flex-wrap:wrap}
@@ -654,13 +654,21 @@ tr.detail-row td{background:var(--glass-2); padding:0}
 .donut-center-num{font:700 20px "Space Grotesk"; fill:var(--tx); font-variant-numeric:tabular-nums}
 .donut-center-lbl{font-size:10.5px; fill:var(--tx-3)}
 .legend{display:flex; flex-direction:column; gap:8px; flex:1; min-width:160px}
-.legend-item{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--tx-2)}
+.legend-item{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--tx-2); border-radius:6px; padding:2px 4px; margin:-2px -4px; transition:opacity .15s var(--ease), background .15s var(--ease)}
 .legend-dot{width:9px; height:9px; border-radius:3px; flex:0 0 9px}
 .legend-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .legend-val{margin-left:auto; color:var(--tx); font-weight:600; font-variant-numeric:tabular-nums}
+/* Tương tác donut: rê chuột vào legend hoặc lát cắt sẽ tô đậm đúng cặp
+   tương ứng, mờ phần còn lại — gắn thêm ở ui.js (bindDonut), không đụng
+   phần vẽ tĩnh của app.js. */
+.donut-wrap circle{transition:opacity .15s var(--ease); cursor:pointer}
+.donut-wrap circle.donut-dim{opacity:.3}
+.legend-item:hover{background:var(--glass-2); cursor:pointer}
+.legend-item.legend-dim{opacity:.4}
+.legend-item.legend-active .legend-name{color:var(--tx); font-weight:600}
 
 /* health strip — thanh phân đoạn */
-.health-strip{display:flex; height:9px; border-radius:var(--r-pill); overflow:hidden; gap:2px; margin:12px 0 10px}
+.health-strip{display:flex; height:9px; border-radius:var(--r-pill); overflow:hidden; gap:2px}
 .health-strip > span,.health-strip > div{height:100%; border-radius:var(--r-pill)}
 .health-strip > .hp-strong,.health-strip > .seg-strong{background:linear-gradient(90deg,var(--strong),#5FF7FF)}
 .health-strip > .hp-healthy,.health-strip > .seg-healthy{background:linear-gradient(90deg,var(--healthy),#9FFFE4)}
@@ -695,15 +703,13 @@ tr.detail-row td{background:var(--glass-2); padding:0}
    ========================================================= */
 .dash-hero{display:flex; align-items:center; justify-content:flex-end; gap:16px; padding:14px 20px}
 .dash-hero-left{display:flex; align-items:center; gap:14px; min-width:0}
-.dash-hero-right{margin-left:auto; display:flex; flex-direction:column; gap:5px}
-.dash-hero-right label{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--tx-3)}
 /* .fc-block-body / .dash-body-inner: cùng lý do như .tab-panel-body ở trên
    — app.js set inline display:block/none thẳng lên #fcYear1Block/
    #fcMultiBlock (fcSetView) và lên #dashBody (renderDashboard), nên gap
    thật phải đặt ở 1 lớp con app.js không đụng tới, không đặt ngay trên
    các id đó nữa. */
-.fc-block-body{display:flex; flex-direction:column; gap:22px}
-.dash-body-inner{display:flex; flex-direction:column; gap:44px}
+.fc-block-body{display:flex; flex-direction:column; gap:11px}
+.dash-body-inner{display:flex; flex-direction:column; gap:22px}
 .dash-card{margin-top:0}
 .dash-note{font-size:11.5px; color:var(--tx-3); line-height:1.65; margin:4px 2px 0}
 
@@ -766,6 +772,12 @@ tr.detail-row td{background:var(--glass-2); padding:0}
 .pf-tick::after{content:attr(title); position:absolute; top:21px; left:50%; transform:translateX(-50%);
   font:600 9.5px Inter; letter-spacing:.04em; color:var(--tx-3); white-space:nowrap}
 .pf-tick.t-kpi{background:var(--lav)} .pf-tick.t-goal{background:var(--healthy)} .pf-tick.t-out{background:var(--strong)}
+/* Khi ui.js phóng to vùng 50–100% (3 mốc KPI/GOAL/OUT quá sát nhau, chữ đè
+   lên nhau nếu để nguyên thang 0–100%), thêm 2 nhãn mốc đầu/cuối để không
+   gây hiểu lầm là thang đủ 0–100%. */
+.pf-axis-lbl{position:absolute; top:15px; font-size:9.5px; color:var(--tx-3); opacity:.6}
+.pf-axis-lbl.pf-axis-lo{left:0}
+.pf-axis-lbl.pf-axis-hi{right:0}
 .pf-none{font-size:12px; color:var(--tx-3)}
 .pr-note{font-size:11.5px; color:var(--tx-3); margin-top:4px; line-height:1.5}
 .perf-rating{margin-top:14px; padding-top:14px; border-top:1px solid var(--stroke-soft); display:flex; align-items:center; gap:10px; flex-wrap:wrap}
@@ -877,6 +889,7 @@ tr.detail-row td{background:var(--glass-2); padding:0}
   .app-content{padding:16px 14px 50px}
   .topbar{padding:12px 14px; flex-wrap:wrap; row-gap:10px}
   .head-tab-extra{order:3; width:100%}
+  #hteScorecard{order:3; width:100%; margin-left:0}
   #userEmail{display:none}
   .profile-strip .ps-info,.profile-strip .ps-chips{display:none}
   .profile-strip{padding:4px; border:0; background:transparent}

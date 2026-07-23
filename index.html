@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="login-mode">
@@ -33,7 +33,7 @@
   <section class="boot-screen" role="status" aria-live="polite">
     <div class="login-card boot-card">
       <div class="brand">
-        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true">
+        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
 <polygon points="28,28 44,28 44,42 58,42 58,58 44,58 44,72 28,72 28,58 14,58 14,42 28,42" fill="#0B0D17"/><circle cx="76" cy="36" r="8" fill="#0B0D17"/><circle cx="84" cy="62" r="8" fill="#0B0D17"/>
 </svg></div>
         <div class="name">CS Console<small>Nhìn thấu deal. Làm chủ con số.</small></div>
@@ -53,7 +53,7 @@
       <div class="login-tab"><span class="dot"></span>CHS_CS ≥ 50 ✓</div>
 
       <div class="brand">
-        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true">
+        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
 <polygon points="28,28 44,28 44,42 58,42 58,58 44,58 44,72 28,72 28,58 14,58 14,42 28,42" fill="#0B0D17"/><circle cx="76" cy="36" r="8" fill="#0B0D17"/><circle cx="84" cy="62" r="8" fill="#0B0D17"/>
 </svg></div>
         <div class="name">CS Console<small>Nhìn thấu deal. Làm chủ con số.</small></div>
@@ -108,7 +108,7 @@
       <div class="login-tab"><span class="dot"></span>FIRST LOGIN · SETUP</div>
 
       <div class="brand">
-        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true">
+        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
 <polygon points="28,28 44,28 44,42 58,42 58,58 44,58 44,72 28,72 28,58 14,58 14,42 28,42" fill="#0B0D17"/><circle cx="76" cy="36" r="8" fill="#0B0D17"/><circle cx="84" cy="62" r="8" fill="#0B0D17"/>
 </svg></div>
         <div class="name">Đăng ký thông tin<small>Dùng để tính Performance &amp; Commission</small></div>
@@ -158,7 +158,7 @@
     <!-- ============ SIDEBAR ============ -->
     <aside class="side" id="side">
       <div class="brand">
-        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true">
+        <div class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
 <polygon points="28,28 44,28 44,42 58,42 58,58 44,58 44,72 28,72 28,58 14,58 14,42 28,42" fill="#0B0D17"/><circle cx="76" cy="36" r="8" fill="#0B0D17"/><circle cx="84" cy="62" r="8" fill="#0B0D17"/>
 </svg></div>
         <div class="brand-text">CS Console<small>Performance Console</small></div>
@@ -245,8 +245,6 @@
 
         <!-- Khối điều khiển riêng theo tab, đặt lên header:
              - Forecast: toggle Năm 1 / Năm 2++ (.fc-view-btn — hook có sẵn của app.js)
-             - Scorecard: chọn "Tháng đánh giá" (#dbMonth — app.js đọc/ghi theo id, không
-               quan tâm vị trí trong DOM)
              ui.js (syncTitle) chỉ bật đúng khối theo tab đang mở, giống cách làm với
              #headSearch bên dưới. -->
         <div class="head-tab-extra" id="headTabExtra">
@@ -254,12 +252,6 @@
             <div class="fc-view-toggle" id="fcViewToggle">
               <button type="button" class="fc-view-btn active" data-view="y1">Năm 1</button>
               <button type="button" class="fc-view-btn" data-view="multi">Năm 2++</button>
-            </div>
-          </div>
-          <div class="hte-block" id="hteScorecard" style="display:none;">
-            <div class="dash-hero-right">
-              <label for="dbMonth">Tháng đánh giá</label>
-              <select id="dbMonth" class="fc-month"></select>
             </div>
           </div>
         </div>
@@ -270,6 +262,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           <input type="text" id="ovSearch" class="search-input" placeholder="Tìm khách hàng, Sys ID, Deal ID…">
           <input type="text" id="fcSearch" class="search-input" placeholder="Tìm theo tên deal…" style="display:none;">
+        </div>
+
+        <!-- Scorecard: chọn "Tháng đánh giá" (#dbMonth — app.js đọc/ghi theo id, không
+             quan tâm vị trí DOM) — đặt riêng, sát lề phải cạnh avatar, không còn nhãn chữ
+             (chỉ giữ aria-label cho screen reader). -->
+        <div class="hte-block" id="hteScorecard" style="display:none;">
+          <select id="dbMonth" class="fc-month" aria-label="Tháng đánh giá"></select>
         </div>
 
         <div class="user-box" id="userBox">
@@ -734,7 +733,7 @@
 
   <!-- ui.js nạp TRƯỚC app.js: nó chỉ lo giao diện, nhưng cần cài "tai nghe"
        fetch trước khi app.js gọi API lần đầu để đọc được avatar từ profile -->
-  <script src="ui.js?v=6"></script>
+  <script src="ui.js?v=7"></script>
   <!-- app.js: KHÔNG đổi so với bản hiện tại -->
   <script src="app.js?v=5"></script>
 
