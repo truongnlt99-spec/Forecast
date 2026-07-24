@@ -707,4 +707,51 @@
     new MutationObserver(enhancePerfGrid).observe(perfGridEl, { childList: true });
     enhancePerfGrid();
   }
+
+  // CHS score color gradient (low score = light blue, high score = dark blue)
+  function colorizeChsScores() {
+    var radarRows = document.querySelectorAll('.radar-row');
+    Array.prototype.forEach.call(radarRows, function(row) {
+      var cells = row.querySelectorAll('.radar-m');
+      if (!cells.length) return;
+      var scoreText = cells[0].textContent.trim();
+      var match = scoreText.match(/(\d+)/);
+      if (!match) return;
+      var score = parseInt(match[1], 10);
+      // Gradient: 0-40 = light blue (#9EBFFF), 41-79 = medium (#6FA0FF), 80-100 = dark (#3D5CFF)
+      var color;
+      if (score < 40) color = '#9EBFFF';
+      else if (score < 80) color = '#6FA0FF';
+      else color = '#3D5CFF';
+      row.style.color = color;
+    });
+  }
+  var dashBody = $('dashBody');
+  if (dashBody) {
+    new MutationObserver(colorizeChsScores).observe(dashBody, { childList: true, subtree: true });
+    colorizeChsScores();
+  }
+
+  // CHS average score on Overview - apply same gradient instead of health band color
+  function colorizeOverviewChsScore() {
+    var kpiChs = $('kpiChs');
+    if (!kpiChs) return;
+    var text = kpiChs.textContent.trim();
+    var match = text.match(/([\d,]+)/);
+    if (!match) return;
+    var scoreStr = match[1].replace(',', '.');
+    var score = parseFloat(scoreStr);
+    if (isNaN(score)) return;
+    var color;
+    if (score < 40) color = '#9EBFFF';
+    else if (score < 80) color = '#6FA0FF';
+    else color = '#3D5CFF';
+    kpiChs.style.color = color;
+  }
+  // Observe kpiChs changes
+  var kpiChs = $('kpiChs');
+  if (kpiChs) {
+    new MutationObserver(colorizeOverviewChsScore).observe(kpiChs, { childList: true, characterData: true, subtree: true });
+    colorizeOverviewChsScore();
+  }
 })();

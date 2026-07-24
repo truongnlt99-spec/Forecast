@@ -39,6 +39,8 @@ html[data-theme="dark"],html:not([data-theme]){
   --side-active-bg:#1B2A47; --side-active-tx:#A5B4FC;
   /* Track nền chart/progress — Design Spec mục 2 */
   --chart-track:rgba(148,163,184,.18);
+  /* Breakdown amount highlight (xanh dương nhạt, nhạt hơn Strong) */
+  --amount-highlight:#6FA0FF;
   /* Accent gradient card (điểm nhấn duy nhất/màn) — Design Spec mục 5 */
   --grad-card-bg:radial-gradient(ellipse at 50% 130%,#4A4FCE 0%,#2E2E8F 35%,#15152B 70%);
   --grad-card-label:#9C9FE0; --grad-card-value:#F5F5FB;
@@ -62,6 +64,8 @@ html[data-theme="light"]{
   --neutral-bg:#EEF0F4; --neutral-tx:#64748B;
   --side-active-bg:#EEF1FD; --side-active-tx:#1E3FE0;
   --chart-track:#E2E6F5;
+  /* Breakdown amount highlight (xanh dương nhạt, nhạt hơn Strong) */
+  --amount-highlight:#5680D9;
   --grad-card-bg:radial-gradient(ellipse at 50% 130%,#4A4FCE 0%,#2E2E8F 35%,#15152B 70%);
   --grad-card-label:#9C9FE0; --grad-card-value:#F5F5FB;
 }
@@ -647,11 +651,11 @@ tr.detail-row td{background:var(--glass-2); padding:0}
 .badge.gl-doing,.badge.st-wip{background:color-mix(in srgb,var(--lav) 20%,transparent); color:var(--lav)}
 .badge.gl-overdue,.badge.st-late{background:color-mix(in srgb,var(--risk) 16%,transparent); color:var(--risk)}
 .badge.st-over{background:color-mix(in srgb,var(--amber) 20%,transparent); color:var(--amber)}
-.badge.ky-t1{background:color-mix(in srgb,var(--strong) 16%,transparent); color:var(--strong)}
-.badge.ky-t4{background:color-mix(in srgb,var(--healthy) 16%,transparent); color:var(--healthy)}
+.badge.ky-t1{background:var(--strong-bg); color:var(--strong-tx)}
+.badge.ky-t4{background:var(--healthy-bg); color:var(--healthy-tx)}
 .badge.yr-1{background:var(--glass-2); color:var(--tx-2); box-shadow:inset 0 0 0 1px var(--stroke-soft)}
 .badge.yr-multi{background:color-mix(in srgb,var(--magenta) 16%,transparent); color:var(--magenta)}
-.badge.solution{background:color-mix(in srgb,var(--cyan) 14%,transparent); color:var(--cyan); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cyan) 30%,transparent); font-size:10px; padding:2px 8px}
+.badge.solution{background:var(--strong-bg); color:var(--strong-tx); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--strong) 30%,transparent); font-size:10px; padding:2px 8px}
 
 /* ---------- Forecast input cells ---------- */
 .fc-in{
@@ -798,7 +802,7 @@ html[data-theme="light"] .income-hero::after{
 .brk-note{font-size:11.5px; color:var(--tx-3); margin-top:4px; line-height:1.55}
 .brk-bar{height:5px; border-radius:var(--r-pill); background:var(--glass); margin-top:9px; overflow:hidden}
 .brk-bar i{display:block; height:100%; border-radius:var(--r-pill); transition:width .6s var(--ease)}
-.brk-amt{text-align:right; font:700 16px "Space Grotesk"; font-variant-numeric:tabular-nums; white-space:nowrap}
+.brk-amt{text-align:right; font:700 16px "Space Grotesk"; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--amount-highlight)}
 .brk-row.sum{background:linear-gradient(100deg,rgba(61,92,255,.20),rgba(109,91,238,.09)); border-color:var(--stroke)}
 .brk-row.sum .brk-amt{font-size:19px}
 .brk-row.grand{background:linear-gradient(100deg,rgba(61,92,255,.16),rgba(45,212,191,.12)); border-color:var(--stroke)}
