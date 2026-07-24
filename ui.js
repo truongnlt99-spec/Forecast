@@ -183,7 +183,7 @@
     var lb = $('accThemeLb');
     if (lb) lb.textContent = mode === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', mode === 'dark' ? '#0B0D17' : '#EEF1FB');
+    if (meta) meta.setAttribute('content', mode === 'dark' ? '#0B0D12' : '#F7F8FA');
     try { localStorage.setItem(LS_THEME, mode); } catch (e) {}
   }
   var themeBtn = $('accTheme');
@@ -515,7 +515,7 @@
     var parts = [];
 
     // Bảng màu cho từng cấu phần, khớp thứ tự app.js render ở #comTfoot
-    var COLORS = ['var(--cyan)', 'var(--lav)', 'var(--healthy)', '#5FE0C0', 'var(--magenta)'];
+    var COLORS = ['var(--cyan)', 'var(--lav)', 'var(--healthy)', '#F59E0B', 'var(--magenta)'];
 
     rows.forEach(function (tr) {
       var r = textOf(tr);
