@@ -754,4 +754,25 @@
     new MutationObserver(colorizeOverviewChsScore).observe(kpiChs, { childList: true, characterData: true, subtree: true });
     colorizeOverviewChsScore();
   }
+
+  // Google login UX - show loading state
+  var gbtn = $('gbtn');
+  if (gbtn) {
+    var originalSignIn = window.signInWithGoogle;
+    window.signInWithGoogle = function() {
+      // Disable button, fade out, show loading
+      gbtn.disabled = true;
+      gbtn.style.opacity = '0.6';
+      gbtn.style.cursor = 'wait';
+      // Show spinner, hide text
+      var spinner = $('spinner');
+      var gtext = $('gtext');
+      var glogo = $('glogo');
+      if (spinner) spinner.classList.remove('hidden');
+      if (glogo) glogo.classList.add('hidden');
+      if (gtext) gtext.textContent = 'Đang xác nhận...';
+      // Call original Google sign-in
+      if (originalSignIn) originalSignIn();
+    };
+  }
 })();

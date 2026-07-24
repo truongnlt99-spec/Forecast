@@ -961,4 +961,11 @@ html[data-theme="light"] .income-hero::after{
   .btn-txt{display:none}
   .btn{padding:9px 12px}
   .table-scroll{max-height:none}
+  /* Hide subtitle text on mobile to prevent header overflow */
+  .kpi-sub,.ps-sub,.ps-role,.login-sub,.reg-sub{display:none !important}
+  /* Tighten font and spacing for profile on mobile */
+  .ps-name{font-size:12px; max-width:140px}
+  /* Compact Forecast year selector buttons and Scorecard month selector */
+  .fc-view-btn{font-size:11px; padding:6px 12px}
+  .fc-month{font-size:12px; padding:6px 28px 6px 10px}
 }
